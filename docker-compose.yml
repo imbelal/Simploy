@@ -7,6 +7,11 @@ services:
       POSTGRES_PASSWORD: postgres
     ports: ["5432:5432"]
     volumes: [pgdata:/var/lib/postgresql/data]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d simploy"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
 
   api:
     build: { context: ., dockerfile: src/Simploy.Api/Dockerfile }
@@ -15,7 +20,9 @@ services:
       ASPNETCORE_ENVIRONMENT: Development
       ConnectionStrings__Default: "Host=postgres;Port=5432;Database=simploy;Username=postgres;Password=postgres"
       UseInMemoryDb: "false"
-    depends_on: [postgres]
+    depends_on:
+      postgres:
+        condition: service_healthy
 
   web:
     build: { context: ./web, dockerfile: Dockerfile }
