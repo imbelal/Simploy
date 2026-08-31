@@ -36,7 +36,10 @@ using (var scope = app.Services.CreateScope())
 {
     var db = scope.ServiceProvider.GetRequiredService<SimployDbContext>();
     db.Database.EnsureCreated();
-    SeedData.EnsureSeeded(db);
+    // Only seed demo data in Development (local `dotnet run`). Production/VM
+    // deployments start empty: you add your real servers & projects in the UI.
+    if (app.Environment.IsDevelopment())
+        SeedData.EnsureSeeded(db);
 }
 
 app.UseCors();
