@@ -27,6 +27,17 @@ public class EnvironmentsController(SimployDbContext db) : ControllerBase
         await db.Environments.Include(e => e.Server).Include(e => e.Domains).Include(e => e.Deployments.OrderByDescending(d => d.CreatedAt).Take(10))
             .FirstOrDefaultAsync(e => e.Id == id) is { } e ? e : NotFound();
 
+    /// <summary>Sets the env vars passed to the app as a .env file during deploy.</summary>
+    [HttpPut("{id:guid}/env-vars")]
+    public async Task<IActionResult> SetEnvVars(Guid id, SetEnvVarsRequest req)
+    {
+        var e = await db.Environments.FindAsync(id);
+        if (e is null) return NotFound();
+        e.EnvVars = req.EnvVars;
+        await db.SaveChangesAsync();
+        return NoContent();
+    }
+
     [HttpDelete("{id:guid}")]
     public async Task<IActionResult> Delete(Guid id)
     {

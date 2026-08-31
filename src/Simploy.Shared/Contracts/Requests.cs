@@ -3,6 +3,7 @@ namespace Simploy.Shared.Contracts;
 public record CreateProjectRequest(string Name, string Slug, string ImageRepository, string? GitRepository, string? Description, string? GitToken, string? RegistryUsername, string? RegistryPassword, string? DockerfilePath, string? DockerContext);
 public record CreateServerRequest(string Name, string Host, int SshPort, string SshUser);
 public record CreateEnvironmentRequest(Guid ProjectId, Guid ServerId, string Name, string Slot, string ImageTag);
+public record SetEnvVarsRequest(Dictionary<string, string> EnvVars);
 public record CreateDeploymentRequest(Guid EnvironmentId, string ImageTag, string Strategy, string? CommitSha, int CanaryPercent = 50);
 
 /// <summary>

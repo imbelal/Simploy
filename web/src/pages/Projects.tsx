@@ -9,6 +9,28 @@ export default function Projects() {
   const [form, setForm] = useState({ name: 'BdShopManager', slug: 'bdshopmanager', imageRepository: 'ghcr.io/imbelal/bdshopmanager', gitRepository: 'https://github.com/imbelal/BdShopManager', gitToken: '', registryUsername: '', registryPassword: '', dockerfilePath: 'src/WebApi/Dockerfile', dockerContext: '.' })
   const [showPrivate, setShowPrivate] = useState(false)
   const [msg, setMsg] = useState('')
+  const [envEdit, setEnvEdit] = useState<any>(null)
+  const [envText, setEnvText] = useState('')
+
+  const openEnvEdit = (e: any) => {
+    setEnvEdit(e)
+    setEnvText(Object.entries(e.envVars || {}).map(([k, v]) => `${k}=${v}`).join('\n'))
+  }
+  const saveEnv = async () => {
+    if (!envEdit) return
+    const vars: Record<string, string> = {}
+    for (const line of envText.split('\n')) {
+      const t = line.trim()
+      if (!t) continue
+      const i = t.indexOf('=')
+      if (i <= 0) continue
+      vars[t.slice(0, i).trim()] = t.slice(i + 1)
+    }
+    await api.envs.setEnv(envEdit.id, vars)
+    setEnvEdit(null)
+    setMsg(`Env vars saved for ${envEdit.name}`)
+    load()
+  }
 
   const load = () => {
     api.projects.list().then(setProjects).catch(e => setMsg(e.message))
@@ -127,7 +149,10 @@ export default function Projects() {
                       <div className="font-medium text-sm flex items-center gap-2 pr-6 text-slate-800">{e.name} <span className="text-[11px] bg-white border px-1.5 py-0.5 rounded font-mono text-slate-500">{e.slot}/{e.imageTag}</span></div>
                       <div className="text-xs text-slate-500 mt-1.5">Server: <span className="font-mono text-[11px]">{e.server?.name} ({e.server?.host})</span></div>
                       <div className="text-xs text-slate-500 mt-0.5">Domains: {e.domains?.map((d: any) => d.host).join(', ') || '—'}</div>
-                      <Link to="/deployments" className="text-xs text-indigo-600 hover:underline font-medium mt-2 inline-flex items-center">Deploy →</Link>
+                      <div className="flex items-center gap-2 mt-2">
+                        <Link to="/deployments" className="text-xs text-indigo-600 hover:underline font-medium">Deploy →</Link>
+                        <button onClick={() => openEnvEdit(e)} className="text-xs text-indigo-600 hover:underline font-medium">Env vars</button>
+                      </div>
                     </div>
                   ))}
                   {(p.environments || []).length === 0 && <div className="text-sm text-slate-400 col-span-2 py-5 text-center border border-dashed border-slate-200 rounded-xl">No environments yet — click “+ Environment”</div>}
@@ -138,6 +163,20 @@ export default function Projects() {
         ))}
         {projects.length === 0 && <Card title="Projects"><EmptyState title="No projects yet">Create one above. A demo project is pre-loaded.</EmptyState></Card>}
       </div>
+
+      {envEdit && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-sm p-4">
+          <div className="bg-white rounded-2xl shadow-deep w-full max-w-lg p-5">
+            <div className="font-semibold text-slate-900 mb-1">Env vars — {envEdit.name}</div>
+            <div className="text-xs text-slate-500 mb-3">One per line as <code className="bg-slate-100 px-1 rounded font-mono">KEY=VALUE</code>. Written to the app's <code className="bg-slate-100 px-1 rounded font-mono">.env</code> during deploy. Leave blank to clear.</div>
+            <textarea value={envText} onChange={e => setEnvText(e.target.value)} rows={10} className={inputCls + ' font-mono text-xs'} placeholder={'MSSQL_SA_PASSWORD=YourStr0ngPass!\nACCEPT_EULA=Y\n' + 'JWT_SECRET=...'} />
+            <div className="flex justify-end gap-3 mt-4">
+              <Button variant="secondary" onClick={() => setEnvEdit(null)}>Cancel</Button>
+              <Button variant="primary" onClick={saveEnv}>Save</Button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
