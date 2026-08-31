@@ -44,8 +44,11 @@ public class EnvironmentsController(SimployDbContext db) : ControllerBase
     {
         var e = await db.Environments.Include(x => x.Domains).FirstOrDefaultAsync(x => x.Id == id);
         if (e is null) return NotFound();
-        var now = Guid.NewGuid();
-        e.Domains = req.Domains.Select(d => new Shared.Models.Domain
+
+        // Explicitly remove old rows before inserting new ones to avoid the
+        // unique index on Domain.Host seeing stale rows.
+        if (e.Domains.Count > 0) db.Domains.RemoveRange(e.Domains);
+        db.Domains.AddRange(req.Domains.Select(d => new Shared.Models.Domain
         {
             Id = Guid.NewGuid(),
             EnvironmentId = id,
@@ -56,7 +59,7 @@ public class EnvironmentsController(SimployDbContext db) : ControllerBase
             StaticRoot = d.StaticRoot,
             Weighted = d.Weighted,
             IsActive = true
-        }).ToList();
+        }));
         await db.SaveChangesAsync();
         return NoContent();
     }
