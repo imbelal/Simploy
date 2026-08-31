@@ -1,21 +1,19 @@
 import { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
 import { auth } from '../api'
 import { Button, Field, inputCls } from '../components/Field'
 
-export default function Login() {
+export default function Login({ onLogin }: { onLogin: () => void }) {
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
-  const nav = useNavigate()
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault()
     setBusy(true); setError('')
     try {
       await auth.login(username.trim(), password)
-      nav('/')
+      onLogin()
     } catch (e: any) {
       setError(e.message.includes('401') ? 'Invalid username or password' : e.message)
     } finally { setBusy(false) }

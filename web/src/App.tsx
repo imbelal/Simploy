@@ -1,4 +1,5 @@
 import { BrowserRouter, Routes, Route, NavLink, Navigate } from 'react-router-dom'
+import { useState } from 'react'
 import { auth } from './api'
 import Dashboard from './pages/Dashboard'
 import Servers from './pages/Servers'
@@ -60,12 +61,12 @@ function Sidebar() {
 }
 
 export default function App() {
-  const loggedIn = auth.isLoggedIn()
+  const [loggedIn, setLoggedIn] = useState(auth.isLoggedIn())
   return (
     <BrowserRouter>
       {!loggedIn ? (
         <Routes>
-          <Route path="/login" element={<Login />} />
+          <Route path="/login" element={<Login onLogin={() => setLoggedIn(true)} />} />
           <Route path="*" element={<Navigate replace to="/login" />} />
         </Routes>
       ) : (
