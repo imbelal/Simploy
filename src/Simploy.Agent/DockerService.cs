@@ -173,7 +173,9 @@ public class DockerService(ILogger<DockerService> log)
 
     private async Task BuildImageAsync(string dockerfileFull, string buildCtx, string image, CancellationToken ct)
     {
-        var result = await RunAsync("docker", $"build -f {dockerfileFull} -t {image} {buildCtx}", ct);
+        // Force BuildKit so Dockerfiles using --mount / cache work (needs buildx).
+        var env = new Dictionary<string, string> { ["DOCKER_BUILDKIT"] = "1", ["BUILDKIT_PROGRESS"] = "plain" };
+        var result = await RunAsync("docker", $"build -f {dockerfileFull} -t {image} {buildCtx}", ct, env: env);
         log.LogInformation("Build result: {Result}", result.Trim());
     }
 
@@ -193,10 +195,12 @@ public class DockerService(ILogger<DockerService> log)
         return await client.Containers.ListContainersAsync(new ContainersListParameters { All = true });
     }
 
-    private async Task<string> RunAsync(string file, string args, string? workdir = null, CancellationToken ct = default, string? stdin = null)
+    private async Task<string> RunAsync(string file, string args, string? workdir = null, CancellationToken ct = default, string? stdin = null, IDictionary<string, string>? env = null)
     {
         var psi = new ProcessStartInfo(file, args) { RedirectStandardOutput = true, RedirectStandardError = true, RedirectStandardInput = stdin is not null, UseShellExecute = false };
         if (workdir is not null) psi.WorkingDirectory = workdir;
+        if (env is not null)
+            foreach (var (k, v) in env) psi.Environment[k] = v;
         using var p = Process.Start(psi)!;
         if (stdin is not null)
         {
