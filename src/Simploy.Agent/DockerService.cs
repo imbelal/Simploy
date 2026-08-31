@@ -53,6 +53,11 @@ public class DockerService(ILogger<DockerService> log)
             await RunAsync("docker", $"pull {image}", ct);
         }
 
+        // Many shipped docker-compose.yml files reference the app image as :latest.
+        // Tag the freshly built/pulled image as latest so compose resolves it locally
+        // instead of trying (and failing) to pull the tag from the registry.
+        await RunAsync("docker", $"tag {image} {req.ImageRepository}:latest", ct);
+
         if (oldImage is not null)
         {
             log.LogInformation("Pulling previous {OldImage} for canary", oldImage);
