@@ -93,9 +93,25 @@ public class DockerService(ILogger<DockerService> log)
         // exist (e.g. bd-shop-manager-network). Create any missing ones first.
         await EnsureExternalNetworksAsync(composeContent, ct);
 
+        // SQL Server 2022 runs as non-root and can't write its host bind-mount data
+        // dir (Access is denied). Run mssql services as root via a Simploy compose
+        // override so its setup works on a fresh VM without editing the app repo.
+        var mssqlServices = GetMssqlServices(composeContent);
+        if (mssqlServices.Count > 0)
+        {
+            var overrrideYaml = "services:\n" + string.Concat(mssqlServices.Select(s => $"  {s}:\n    user: root\n"));
+            await File.WriteAllTextAsync(Path.Combine(sourceDir, ".simploy-compose.override.yml"), overrrideYaml, ct);
+            log.LogInformation("Running mssql service(s) as root: {Services}", string.Join(", ", mssqlServices));
+        }
+
         // ---- 5. Start the stack.
+        var overrideFile = Path.Combine(sourceDir, ".simploy-compose.override.yml");
+        var baseCompose = composeFile is null ? "docker-compose.yml" : Path.GetFileName(composeFile);
+        var composeCmd = File.Exists(overrideFile)
+            ? $"compose -f {baseCompose} -f .simploy-compose.override.yml -p {ComposeRenderer.Sanitize(req.Slot)} --env-file .env up -d"
+            : $"compose -p {ComposeRenderer.Sanitize(req.Slot)} --env-file .env up -d";
         log.LogInformation("compose -p {Slot} up -d (from {Dir})", req.Slot, sourceDir);
-        await RunAsync("docker", $"compose -p {ComposeRenderer.Sanitize(req.Slot)} --env-file .env up -d", sourceDir, ct);
+        await RunAsync("docker", composeCmd, sourceDir, ct);
 
         // ---- 6. Health gate.
         var healthTarget = oldImage is null ? $"{serviceName}:{hostPort}" : $"{serviceName}-new:{hostPort}";
@@ -238,6 +254,35 @@ public class DockerService(ILogger<DockerService> log)
             if (indent == 2 && t.EndsWith(":")) { current = t.TrimEnd(':'); continue; }
             if (indent == 4 && t.StartsWith("external:") && t.TrimEnd().EndsWith("true") && current is not null && !result.Contains(current))
                 result.Add(current);
+        }
+        return result;
+    }
+
+    /// <summary>Returns the service names whose image is SQL Server (run as root).</summary>
+    private static List<string> GetMssqlServices(string composeContent)
+    {
+        var result = new List<string>();
+        var inServices = false;
+        string? current = null;
+        foreach (var raw in composeContent.Split('\n'))
+        {
+            var line = raw.TrimEnd();
+            if (string.IsNullOrWhiteSpace(line)) continue;
+            var indent = line.Length - line.TrimStart().Length;
+            var t = line.Trim();
+
+            if (!inServices) { if (indent == 0 && t.StartsWith("services:")) inServices = true; continue; }
+            if (indent == 0) break;
+
+            if (indent == 2 && t.EndsWith(":")) { current = t.TrimEnd(':'); continue; }
+            if (indent == 4 && t.StartsWith("image:"))
+            {
+                var img = t;
+                if (img.Contains("mssql", StringComparison.OrdinalIgnoreCase)
+                    || img.Contains("sqlserver", StringComparison.OrdinalIgnoreCase)
+                    || img.Contains("sql-server", StringComparison.OrdinalIgnoreCase))
+                { if (current is not null && !result.Contains(current)) result.Add(current); }
+            }
         }
         return result;
     }
