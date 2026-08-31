@@ -120,7 +120,6 @@ public static class ComposeRenderer
 
             sb.AppendLine($"# {d.Host}");
             sb.AppendLine($"{d.Host} {{");
-            sb.AppendLine("    import simploy_common");
 
             if (isCanary)
             {
