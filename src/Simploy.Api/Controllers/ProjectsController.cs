@@ -11,7 +11,10 @@ public class ProjectsController(SimployDbContext db) : ControllerBase
 {
     [HttpGet]
     public async Task<IEnumerable<Project>> List() =>
-        await db.Projects.Include(p => p.Environments).ThenInclude(e => e.Server).ToListAsync();
+        await db.Projects
+            .Include(p => p.Environments).ThenInclude(e => e.Server)
+            .Include(p => p.Environments).ThenInclude(e => e.Domains)
+            .ToListAsync();
 
     [HttpGet("{id:guid}")]
     public async Task<ActionResult<Project>> Get(Guid id) =>
