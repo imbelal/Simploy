@@ -95,10 +95,13 @@ public class DockerService(ILogger<DockerService> log)
 
     private async Task SourceFromGitAsync(AgentDeployRequest req, string sourceDir, CancellationToken ct)
     {
-        var cloneUrl = req.GitRepository!;
+        // Allow "github.com/org/app" as well as "https://github.com/org/app".
+        var repo = req.GitRepository!.Trim();
+        if (!repo.Contains("://")) repo = $"https://{repo}";
+        var cloneUrl = repo;
         if (!string.IsNullOrWhiteSpace(req.GitToken))
         {
-            // https://github.com/org/app -> https://<token>@github.com/org/app
+            // https://github.com/org/app -> https://x-access-token:<token>@github.com/org/app
             var uri = new Uri(cloneUrl);
             var host = uri.Host;
             var path = string.Join("/", uri.AbsolutePath.Trim('/').Split('/').Select(Uri.EscapeDataString));
