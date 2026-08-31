@@ -25,7 +25,9 @@ public class ProjectsController(SimployDbContext db) : ControllerBase
     [HttpPost]
     public async Task<ActionResult<Project>> Create(CreateProjectRequest req)
     {
-        var p = new Project { Name = req.Name, Slug = req.Slug, ImageRepository = req.ImageRepository, GitRepository = req.GitRepository, Description = req.Description, GitToken = req.GitToken, RegistryUsername = req.RegistryUsername, RegistryPassword = req.RegistryPassword, DockerfilePath = req.DockerfilePath ?? "Dockerfile", DockerContext = req.DockerContext ?? "." };
+        // ImageRepository is just a local image name for the built image; default to slug.
+        var imageRepo = string.IsNullOrWhiteSpace(req.ImageRepository) ? req.Slug : req.ImageRepository.Trim();
+        var p = new Project { Name = req.Name, Slug = req.Slug, ImageRepository = imageRepo, GitRepository = req.GitRepository, Description = req.Description, GitToken = req.GitToken, RegistryUsername = req.RegistryUsername, RegistryPassword = req.RegistryPassword, DockerfilePath = req.DockerfilePath ?? "Dockerfile", DockerContext = req.DockerContext ?? "." };
         db.Projects.Add(p);
         await db.SaveChangesAsync();
         return CreatedAtAction(nameof(Get), new { id = p.Id }, p);

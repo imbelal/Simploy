@@ -66,9 +66,9 @@ export default function Projects() {
   useEffect(() => { load() }, [])
 
   const create = async () => {
-    if (!form.slug || !form.imageRepository) return setMsg('Slug and image repository are required')
-    if (!form.gitRepository && !form.imageRepository) return setMsg('Add either a Git repo (to build) or an image repository (to pull)')
-    await api.projects.create(form)
+    if (!form.slug) return setMsg('Slug is required')
+    const payload = { ...form, imageRepository: (form.imageRepository || form.slug).trim(), gitRepository: form.gitRepository || null }
+    await api.projects.create(payload)
     setMsg('Project created' + (form.gitToken || form.registryPassword ? ' with private auth' : ' (public)'))
     load()
   }
@@ -107,8 +107,8 @@ export default function Projects() {
           <Field label="Slug" hint="Unique id; used in container and folder names. Lowercase + dashes.">
             <input className={inputCls} value={form.slug} onChange={e => setForm({ ...form, slug: e.target.value.toLowerCase().replace(/\s+/g, '-') })} />
           </Field>
-          <Field label="Image repository" hint="Where the built image is tagged, e.g. ghcr.io/you/app">
-            <input className={inputCls} value={form.imageRepository} onChange={e => setForm({ ...form, imageRepository: e.target.value })} />
+          <Field label="Image repository (optional)" hint="Only a local image name used to tag the build — it doesn't need to exist in a registry. Defaults to the slug if blank.">
+            <input className={inputCls} placeholder="defaults to slug" value={form.imageRepository} onChange={e => setForm({ ...form, imageRepository: e.target.value })} />
           </Field>
           <Field label="Git repository" hint="URL to build from source. Leave blank to only pull a prebuilt image.">
             <input className={inputCls} placeholder="https://github.com/org/app" value={form.gitRepository} onChange={e => setForm({ ...form, gitRepository: e.target.value })} />
