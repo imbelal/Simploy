@@ -175,7 +175,7 @@ public class DockerService(ILogger<DockerService> log)
     {
         // Force BuildKit so Dockerfiles using --mount / cache work (needs buildx).
         var env = new Dictionary<string, string> { ["DOCKER_BUILDKIT"] = "1", ["BUILDKIT_PROGRESS"] = "plain" };
-        var result = await RunAsync("docker", $"build -f {dockerfileFull} -t {image} {buildCtx}", ct, env: env);
+        var result = await RunAsync("docker", $"build -f {dockerfileFull} -t {image} {buildCtx}", ct: ct, env: env);
         log.LogInformation("Build result: {Result}", result.Trim());
     }
 
