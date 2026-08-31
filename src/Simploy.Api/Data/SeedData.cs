@@ -12,8 +12,10 @@ public static class SeedData
     {
         if (db.Servers.Any() || db.Projects.Any()) return;
 
+        // Distinct hosts: there's a unique index on Server.Host, so the demo
+        // servers can't share an IP. 127.0.0.1 / 127.0.0.2 are both loopback.
         var stagingVm = new Server { Name = "staging-vm", Host = "127.0.0.1", SshPort = 22, SshUser = "root", Status = ServerStatus.Pending };
-        var prodVm = new Server { Name = "prod-vm", Host = "127.0.0.1", SshPort = 22, SshUser = "root", Status = ServerStatus.Pending };
+        var prodVm = new Server { Name = "prod-vm", Host = "127.0.0.2", SshPort = 22, SshUser = "root", Status = ServerStatus.Pending };
         db.Servers.AddRange(stagingVm, prodVm);
 
         var project = new Project
