@@ -159,7 +159,14 @@ public class DockerService(ILogger<DockerService> log)
     private async Task MaybeLoginAsync(AgentDeployRequest req, CancellationToken ct)
     {
         if (string.IsNullOrWhiteSpace(req.RegistryUsername) || string.IsNullOrWhiteSpace(req.RegistryPassword)) return;
-        var registry = new Uri(req.ImageRepository).Host;
+
+        // Derive the registry host without URI parsing: ImageRepository may be
+        // "ghcr.io/imbelal/app" (no scheme) or "https://ghcr.io/imbelal/app".
+        var repo = req.ImageRepository ?? "";
+        if (repo.Contains("://")) repo = repo[(repo.IndexOf("://") + 3)..];
+        var registry = repo.Split('/')[0];
+        if (string.IsNullOrWhiteSpace(registry)) return;
+
         log.LogInformation("docker login {Registry} as {User}", registry, req.RegistryUsername);
         await RunAsync("docker", $"login {registry} -u {req.RegistryUsername} --password-stdin", ct: ct, stdin: req.RegistryPassword);
     }
