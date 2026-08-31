@@ -207,7 +207,9 @@ public class DockerService(ILogger<DockerService> log)
     /// bd-shop-manager-network), which docker compose requires to already exist.</summary>
     private async Task EnsureExternalNetworksAsync(string composeContent, CancellationToken ct)
     {
-        foreach (var network in GetExternalNetworks(composeContent))
+        var networks = GetExternalNetworks(composeContent);
+        log.LogInformation("External networks in compose: [{Networks}]", string.Join(", ", networks));
+        foreach (var network in networks)
         {
             try { await RunAsync("docker", $"network inspect {network}", ct); continue; } // exists
             catch { /* missing */ }
@@ -228,11 +230,13 @@ public class DockerService(ILogger<DockerService> log)
             var indent = line.Length - line.TrimStart().Length;
             var t = line.Trim();
 
-            if (!inNetworks) { if (t.StartsWith("networks:")) inNetworks = true; continue; }
-            if (indent == 0) break; // back to a top-level key -> end of networks block
+            // Only the top-level (indent 0) 'networks:' block qualifies; service-level
+            // 'networks:' lists (indented) must be ignored.
+            if (!inNetworks) { if (indent == 0 && t.StartsWith("networks:")) inNetworks = true; continue; }
+            if (indent == 0) break; // back to another top-level key -> end of networks block
 
             if (indent == 2 && t.EndsWith(":")) { current = t.TrimEnd(':'); continue; }
-            if (t.StartsWith("external:") && t.EndsWith("true") && current is not null && !result.Contains(current))
+            if (indent == 4 && t.StartsWith("external:") && t.TrimEnd().EndsWith("true") && current is not null && !result.Contains(current))
                 result.Add(current);
         }
         return result;
