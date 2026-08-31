@@ -36,7 +36,7 @@ export default function Projects() {
 
   const openDomEdit = (e: any) => {
     setDomEdit(e)
-    setDomText((e.domains || []).map((d: any) => d.targetService ? `${d.host} ${d.targetService}` : d.targetPort ? `${d.host} ${d.targetPort}` : d.host).join('\n'))
+    setDomText((e.domains || []).map((d: any) => `${d.enableHttps ? 'https://' : ''}${d.host}${d.targetService ? ` ${d.targetService}` : d.targetPort ? ` ${d.targetPort}` : ''}`).join('\n'))
   }
   const saveDomains = async () => {
     if (!domEdit) return
@@ -44,12 +44,13 @@ export default function Projects() {
     for (const line of domText.split('\n')) {
       const t = line.trim()
       if (!t) continue
-      const [host, target] = t.split(/\s+/).slice(0, 2)
+      const enableHttps = /^https:\/\//i.test(t)
+      const [host, target] = t.replace(/^https:\/\//i, '').split(/\s+/).slice(0, 2)
       if (!host) continue
       if (target && target.includes(':')) {
-        domains.push({ host, targetService: target, isStatic: false, weighted: false, weight: 0 })
+        domains.push({ host, targetService: target, enableHttps, isStatic: false, weighted: false, weight: 0 })
       } else {
-        domains.push({ host, targetPort: target ? +target : 8080, isStatic: false, weighted: false, weight: 0 })
+        domains.push({ host, targetPort: target ? +target : 8080, enableHttps, isStatic: false, weighted: false, weight: 0 })
       }
     }
     await api.envs.setDomains(domEdit.id, domains)
@@ -209,8 +210,8 @@ export default function Projects() {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-sm p-4">
           <div className="bg-white rounded-2xl shadow-deep w-full max-w-md p-5">
             <div className="font-semibold text-slate-900 mb-1">Domains — {domEdit.name}</div>
-            <div className="text-xs text-slate-500 mb-3">One per line as <code className="bg-slate-100 px-1 rounded font-mono">domain.tld</code>, or <code className="bg-slate-100 px-1 rounded font-mono">domain.tld service:port</code> to route to a specific service (e.g. <code className="bg-slate-100 px-1 rounded font-mono">seq.example.com seq:80</code>).</div>
-            <textarea value={domText} onChange={e => setDomText(e.target.value)} rows={6} className={inputCls + ' font-mono text-xs'} placeholder={'api.example.com 8080\nseq.example.com seq:80'} />
+            <div className="text-xs text-slate-500 mb-3">One per line as <code className="bg-slate-100 px-1 rounded font-mono">domain.tld</code>, <code className="bg-slate-100 px-1 rounded font-mono">domain.tld service:port</code> (e.g. <code className="bg-slate-100 px-1 rounded font-mono">seq.example.com seq:80</code>). Prefix with <code className="bg-slate-100 px-1 rounded font-mono">https://</code> to enable Caddy automatic HTTPS (needs DNS + ports 80/443).</div>
+            <textarea value={domText} onChange={e => setDomText(e.target.value)} rows={6} className={inputCls + ' font-mono text-xs'} placeholder={'https://api.example.com 8080\nseq.example.com seq:80'} />
             <div className="flex justify-end gap-3 mt-4">
               <Button variant="secondary" onClick={() => setDomEdit(null)}>Cancel</Button>
               <Button variant="primary" onClick={saveDomains}>Save</Button>

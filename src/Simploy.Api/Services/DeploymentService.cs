@@ -65,7 +65,7 @@ public class DeploymentService(IServiceProvider sp, ILogger<DeploymentService> l
                 RegistryUsername: env.Project.RegistryUsername,
                 RegistryPassword: env.Project.RegistryPassword,
                 EnvVars: env.EnvVars,
-                Domains: env.Domains.Select(d => new DomainRouteRequest(d.Host, d.TargetPort, d.TargetService, d.IsStatic, d.StaticRoot, d.Weighted, 0)).ToList());
+                Domains: env.Domains.Select(d => new DomainRouteRequest(d.Host, d.TargetPort, d.TargetService, d.IsStatic, d.StaticRoot, d.Weighted, 0, d.EnableHttps)).ToList());
 
             using var http = new HttpClient { Timeout = TimeSpan.FromMinutes(10) };
             var resp = await http.PostAsJsonAsync($"{agentUrl}/deploy", payload, ct);

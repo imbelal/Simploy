@@ -119,9 +119,9 @@ public static class ComposeRenderer
             if (d.IsStatic || string.IsNullOrWhiteSpace(d.Host)) continue;
 
             sb.AppendLine($"# {d.Host}");
-            // http:// site: serve plain HTTP (no ACME cert needed) so the app is
-            // reachable immediately. Use an https:// site only when TLS is ready.
-            sb.AppendLine($"http://{d.Host} {{");
+            // https => Caddy automatic HTTPS (Let's Encrypt). Requires the domain
+            // to resolve to this server and ports 80/443 open. Otherwise http://.
+            sb.AppendLine(d.EnableHttps ? $"{d.Host} {{" : $"http://{d.Host} {{");
 
             if (isCanary)
             {

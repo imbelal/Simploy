@@ -11,7 +11,7 @@ public record CreateDeploymentRequest(Guid EnvironmentId, string ImageTag, strin
 /// A domain mapped to an environment. Sent to the agent so it can render the
 /// Caddyfile (including weighted canary split between old/new services).
 /// </summary>
-public record DomainRouteRequest(string Host, int? TargetPort, string? TargetService, bool IsStatic, string? StaticRoot, bool Weighted, int Weight);
+public record DomainRouteRequest(string Host, int? TargetPort, string? TargetService, bool IsStatic, string? StaticRoot, bool Weighted, int Weight, bool EnableHttps = false);
 
 /// <summary>
 /// Full deploy payload sent from the control plane (Api) to the Agent.

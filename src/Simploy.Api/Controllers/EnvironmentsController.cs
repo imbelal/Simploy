@@ -58,6 +58,7 @@ public class EnvironmentsController(SimployDbContext db) : ControllerBase
             IsStatic = d.IsStatic,
             StaticRoot = d.StaticRoot,
             Weighted = d.Weighted,
+            EnableHttps = d.EnableHttps,
             IsActive = true
         }));
         await db.SaveChangesAsync();

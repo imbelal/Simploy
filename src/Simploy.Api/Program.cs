@@ -36,6 +36,10 @@ using (var scope = app.Services.CreateScope())
 {
     var db = scope.ServiceProvider.GetRequiredService<SimployDbContext>();
     db.Database.EnsureCreated();
+    // EnsureCreated does not alter an existing database, so apply lightweight
+    // additive schema changes here (idempotent, Postgres only).
+    if (db.Database.IsRelational())
+        db.Database.ExecuteSqlRaw("ALTER TABLE \"Domains\" ADD COLUMN IF NOT EXISTS \"EnableHttps\" boolean NOT NULL DEFAULT false;");
     // Only seed demo data in Development (local `dotnet run`). Production/VM
     // deployments start empty: you add your real servers & projects in the UI.
     if (app.Environment.IsDevelopment())

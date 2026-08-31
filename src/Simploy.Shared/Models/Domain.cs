@@ -12,6 +12,7 @@ public class Domain
     public bool IsStatic { get; set; }
     public string? StaticRoot { get; set; } // /web
     public bool Weighted { get; set; } // for canary
+    public bool EnableHttps { get; set; } // Caddy automatic HTTPS/Let's Encrypt
 
     public bool IsActive { get; set; } = true;
 }
