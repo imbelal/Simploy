@@ -207,11 +207,24 @@ public class DockerService(ILogger<DockerService> log)
             await p.StandardInput.WriteAsync(stdin.AsMemory());
             p.StandardInput.Close();
         }
-        var stdout = await p.StandardOutput.ReadToEndAsync(ct);
-        var stderr = await p.StandardError.ReadToEndAsync(ct);
+        var sb = new StringBuilder();
+        var stdoutTask = ReadLinesAsync(p.StandardOutput, sb, ct);
+        var stderrTask = ReadLinesAsync(p.StandardError, sb, ct);
+        await Task.WhenAll(stdoutTask, stderrTask);
         await p.WaitForExitAsync(ct);
-        if (p.ExitCode != 0) throw new Exception($"{file} {args} failed ({p.ExitCode}): {stderr}\n{stdout}");
-        return stdout + stderr;
+        if (p.ExitCode != 0) throw new Exception($"{file} {args} failed ({p.ExitCode}): {sb}");
+        return sb.ToString();
+    }
+
+    // Reads a command stream line-by-line so build output is streamed live to the
+    // agent logs (visible via `docker logs -f`) while still being captured.
+    private async Task ReadLinesAsync(StreamReader reader, StringBuilder sb, CancellationToken ct)
+    {
+        while (await reader.ReadLineAsync(ct) is { } line)
+        {
+            sb.AppendLine(line);
+            log.LogInformation("  {Line}", line);
+        }
     }
 
     private async Task<string> WaitHealthyAsync(string target, CancellationToken ct)
