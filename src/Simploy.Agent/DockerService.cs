@@ -116,6 +116,15 @@ public class DockerService(ILogger<DockerService> log)
         log.LogInformation("compose -p {Slot} up -d (from {Dir})", req.Slot, sourceDir);
         await RunAsync("docker", composeCmd, sourceDir, ct);
 
+        // Caddy mounts the generated Caddyfile; reload it so new domains apply
+        // without waiting for a container recreate.
+        foreach (var svc in GetCaddyServices(composeContent))
+        {
+            log.LogInformation("Reloading {Svc} to pick up new Caddyfile", svc);
+            try { await RunAsync("docker", $"compose -p {ComposeRenderer.Sanitize(req.Slot)} restart {svc}", sourceDir, ct); }
+            catch (Exception ex) { log.LogWarning("Could not reload {Svc}: {Ex}", svc, ex.Message); }
+        }
+
         // ---- 6. Health gate.
         var healthTarget = oldImage is null ? $"{serviceName}:{hostPort}" : $"{serviceName}-new:{hostPort}";
         var health = await WaitHealthyAsync(healthTarget, ct);
@@ -262,6 +271,27 @@ public class DockerService(ILogger<DockerService> log)
     }
 
     /// <summary>Returns the service names whose image is SQL Server (run as root).</summary>
+    /// <summary>Returns service names whose image contains 'caddy' (the reverse proxy).</summary>
+    private static List<string> GetCaddyServices(string composeContent)
+    {
+        var result = new List<string>();
+        var inServices = false;
+        string? current = null;
+        foreach (var raw in composeContent.Split('\n'))
+        {
+            var line = raw.TrimEnd();
+            if (string.IsNullOrWhiteSpace(line)) continue;
+            var indent = line.Length - line.TrimStart().Length;
+            var t = line.Trim();
+            if (!inServices) { if (indent == 0 && t.StartsWith("services:")) inServices = true; continue; }
+            if (indent == 0) break;
+            if (indent == 2 && t.EndsWith(":")) { current = t.TrimEnd(':'); continue; }
+            if (indent == 4 && t.StartsWith("image:") && current is not null && t.Contains("caddy", StringComparison.OrdinalIgnoreCase))
+            { if (!result.Contains(current)) result.Add(current); }
+        }
+        return result;
+    }
+
     /// <summary>Returns the service name whose image matches the app's image repo.</summary>
     private static string? FindAppService(string composeContent, string imageRepository)
     {

@@ -119,7 +119,9 @@ public static class ComposeRenderer
             if (d.IsStatic || string.IsNullOrWhiteSpace(d.Host)) continue;
 
             sb.AppendLine($"# {d.Host}");
-            sb.AppendLine($"{d.Host} {{");
+            // http:// site: serve plain HTTP (no ACME cert needed) so the app is
+            // reachable immediately. Use an https:// site only when TLS is ready.
+            sb.AppendLine($"http://{d.Host} {{");
 
             if (isCanary)
             {
