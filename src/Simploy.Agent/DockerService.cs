@@ -111,34 +111,35 @@ public class DockerService(ILogger<DockerService> log)
         var refsExist = Directory.Exists(sourceDir) && Directory.Exists(Path.Combine(sourceDir, ".git"));
         var branch = string.IsNullOrWhiteSpace(req.GitBranch) ? "main" : req.GitBranch;
 
-        if (refsExist)
+        try
         {
-            log.LogInformation("Fetching {Url} branch {Branch}", req.GitRepository, branch);
+            if (!refsExist)
+            {
+                log.LogInformation("Cloning {Repo}", req.GitRepository);
+                await RunAsync("git", $"clone --depth 1 {cloneUrl} {sourceDir}", ct);
+            }
+
+            // Try to move to the configured branch; if it doesn't exist (e.g. the repo
+            // default is 'master', not 'main'), fall back to the remote default branch.
+            string target;
             try
             {
                 await RunAsync("git", $"-C {sourceDir} fetch --depth 1 origin {branch}", ct);
-                await RunAsync("git", $"-C {sourceDir} checkout {branch}", ct);
-                await RunAsync("git", $"-C {sourceDir} pull --ff-only origin {branch}", ct);
+                target = branch;
             }
-            catch (Exception ex)
+            catch
             {
-                throw Redact(ex, req.GitToken);
+                log.LogWarning("Branch {Branch} not found on {Repo}; using repo default branch", branch, req.GitRepository);
+                await RunAsync("git", $"-C {sourceDir} fetch --depth 1 origin", ct);
+                var head = await RunAsync("git", $"-C {sourceDir} symbolic-ref --short refs/remotes/origin/HEAD", ct);
+                target = head.Trim().Replace("origin/", "");
             }
+            await RunAsync("git", $"-C {sourceDir} reset --hard origin/{target}", ct);
+            await RunAsync("git", $"-C {sourceDir} checkout -B {target} origin/{target}", ct);
         }
-        else
+        catch (Exception ex)
         {
-            log.LogInformation("Cloning {Url} branch {Branch}", req.GitRepository, branch);
-            try
-            {
-                await RunAsync("git", $"clone --depth 1 --branch {branch} {cloneUrl} {sourceDir}", ct);
-            }
-            catch (Exception)
-            {
-                // Branch may not exist (e.g. the repo's default is 'master'). Fall
-                // back to cloning the repo default branch.
-                log.LogWarning("Branch {Branch} not found on {Url}; cloning default branch", branch, req.GitRepository);
-                await RunAsync("git", $"clone --depth 1 {cloneUrl} {sourceDir}", ct);
-            }
+            throw Redact(ex, req.GitToken);
         }
     }
 
