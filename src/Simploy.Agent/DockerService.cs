@@ -71,18 +71,27 @@ public class DockerService(ILogger<DockerService> log)
         var composeFile = FindComposeFile(sourceDir);
         var hostPort = req.Domains?.FirstOrDefault(d => !d.IsStatic && d.TargetPort.HasValue)?.TargetPort ?? 8080;
 
+        string composeContent;
         if (composeFile is null)
         {
             // No repo compose: generate one. Canary uses a blue/green pair of services.
-            var generated = oldImage is null
+            composeContent = oldImage is null
                 ? ComposeRenderer.RenderCompose(req, serviceName, hostPort)
                 : ComposeRenderer.RenderCanaryCompose(req, serviceName, hostPort, image, oldImage);
-            await File.WriteAllTextAsync(Path.Combine(sourceDir, "docker-compose.yml"), generated, ct);
+            await File.WriteAllTextAsync(Path.Combine(sourceDir, "docker-compose.yml"), composeContent, ct);
+        }
+        else
+        {
+            composeContent = await File.ReadAllTextAsync(composeFile, ct);
         }
 
         // ---- 4. Render Caddyfile for domain routing / weighted canary.
         var caddyContent = ComposeRenderer.RenderCaddyfile(req, serviceName, hostPort);
         await File.WriteAllTextAsync(Path.Combine(sourceDir, "Caddyfile"), caddyContent, ct);
+
+        // Compose files can declare 'external: true' networks that must already
+        // exist (e.g. bd-shop-manager-network). Create any missing ones first.
+        await EnsureExternalNetworksAsync(composeContent, ct);
 
         // ---- 5. Start the stack.
         log.LogInformation("compose -p {Slot} up -d (from {Dir})", req.Slot, sourceDir);
@@ -192,6 +201,41 @@ public class DockerService(ILogger<DockerService> log)
             if (File.Exists(p)) return p;
         }
         return null;
+    }
+
+    /// <summary>Creates networks declared as external in the compose file (e.g.
+    /// bd-shop-manager-network), which docker compose requires to already exist.</summary>
+    private async Task EnsureExternalNetworksAsync(string composeContent, CancellationToken ct)
+    {
+        foreach (var network in GetExternalNetworks(composeContent))
+        {
+            try { await RunAsync("docker", $"network inspect {network}", ct); continue; } // exists
+            catch { /* missing */ }
+            log.LogInformation("Creating external network {Network}", network);
+            await RunAsync("docker", $"network create {network}", ct);
+        }
+    }
+
+    private static List<string> GetExternalNetworks(string composeContent)
+    {
+        var result = new List<string>();
+        var inNetworks = false;
+        string? current = null;
+        foreach (var raw in composeContent.Split('\n'))
+        {
+            var line = raw.TrimEnd();
+            if (string.IsNullOrWhiteSpace(line)) continue;
+            var indent = line.Length - line.TrimStart().Length;
+            var t = line.Trim();
+
+            if (!inNetworks) { if (t.StartsWith("networks:")) inNetworks = true; continue; }
+            if (indent == 0) break; // back to a top-level key -> end of networks block
+
+            if (indent == 2 && t.EndsWith(":")) { current = t.TrimEnd(':'); continue; }
+            if (t.StartsWith("external:") && t.EndsWith("true") && current is not null && !result.Contains(current))
+                result.Add(current);
+        }
+        return result;
     }
 
     public async Task<IList<ContainerListResponse>> ListContainersAsync()
