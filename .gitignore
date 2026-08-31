@@ -1,0 +1,32 @@
+# .NET build output
+bin/
+obj/
+*.user
+*.suo
+
+# Node / web
+node_modules/
+web/dist/
+web/.vite/
+
+# Environment & secrets (web/.env only holds a public VITE_API_URL, keep it)
+.env
+.env.*
+!.env.example
+!web/.env
+
+# macOS
+.DS_Store
+
+# Editors / IDE
+.idea/
+.vscode/
+*.swp
+
+# Logs
+*.log
+logs/
+
+# Test results
+TestResults/
+*.trx

@@ -1,0 +1,7 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/Simploy.Agent/Simploy.Agent.csproj" />
+    <Project Path="src/Simploy.Api/Simploy.Api.csproj" />
+    <Project Path="src/Simploy.Shared/Simploy.Shared.csproj" />
+  </Folder>
+</Solution>

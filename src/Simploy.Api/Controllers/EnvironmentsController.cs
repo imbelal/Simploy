@@ -1,0 +1,39 @@
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
+using Simploy.Api.Data;
+using Simploy.Shared.Contracts;
+
+namespace Simploy.Api.Controllers;
+
+[ApiController, Route("api/environments")]
+public class EnvironmentsController(SimployDbContext db) : ControllerBase
+{
+    [HttpGet]
+    public async Task<IEnumerable<Shared.Models.Environment>> List([FromQuery] Guid? projectId) =>
+        await db.Environments.Include(e => e.Server).Include(e => e.Domains)
+            .Where(e => projectId == null || e.ProjectId == projectId).ToListAsync();
+
+    [HttpPost]
+    public async Task<ActionResult<Shared.Models.Environment>> Create(CreateEnvironmentRequest req)
+    {
+        var e = new Shared.Models.Environment { ProjectId = req.ProjectId, ServerId = req.ServerId, Name = req.Name, Slot = req.Slot, ImageTag = req.ImageTag };
+        db.Environments.Add(e);
+        await db.SaveChangesAsync();
+        return CreatedAtAction(nameof(Get), new { id = e.Id }, e);
+    }
+
+    [HttpGet("{id:guid}")]
+    public async Task<ActionResult<Shared.Models.Environment>> Get(Guid id) =>
+        await db.Environments.Include(e => e.Server).Include(e => e.Domains).Include(e => e.Deployments.OrderByDescending(d => d.CreatedAt).Take(10))
+            .FirstOrDefaultAsync(e => e.Id == id) is { } e ? e : NotFound();
+
+    [HttpDelete("{id:guid}")]
+    public async Task<IActionResult> Delete(Guid id)
+    {
+        var e = await db.Environments.FindAsync(id);
+        if (e is null) return NotFound();
+        db.Remove(e);
+        await db.SaveChangesAsync();
+        return NoContent();
+    }
+}
