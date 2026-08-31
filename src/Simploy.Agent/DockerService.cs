@@ -41,6 +41,15 @@ public class DockerService(ILogger<DockerService> log)
         await MaybeLoginAsync(req, ct);
         var dockerfile = string.IsNullOrWhiteSpace(req.DockerfilePath) ? "Dockerfile" : req.DockerfilePath;
         var dockerfileFull = Path.Combine(sourceDir, dockerfile);
+        if (!File.Exists(dockerfileFull) && File.Exists(Path.Combine(sourceDir, "package.json")))
+        {
+            // Static/frontend app with no Dockerfile: generate one (Node build ->
+            // nginx on 8080 with a /health endpoint), so it can be deployed as-is.
+            log.LogInformation("No Dockerfile found; generating a static-site Dockerfile for {Repo}", req.GitRepository);
+            await WriteStaticDockerfileAsync(sourceDir, ct);
+            dockerfileFull = Path.Combine(sourceDir, "Dockerfile");
+        }
+
         if (File.Exists(dockerfileFull))
         {
             var buildCtx = Path.Combine(sourceDir, string.IsNullOrWhiteSpace(req.DockerContext) ? "." : req.DockerContext);
@@ -196,6 +205,36 @@ public class DockerService(ILogger<DockerService> log)
         if (msg.Contains(encoded)) { msg = msg.Replace(encoded, "***"); changed = true; }
         if (msg.Contains(secret)) { msg = msg.Replace(secret, "***"); changed = true; }
         return changed ? new Exception(msg, ex.InnerException) : ex;
+    }
+
+    /// <summary>Writes a Dockerfile + nginx conf for a static frontend app that ships no
+    /// Dockerfile (e.g. a React build). Serves the built dist on port 8080 with a /health.</summary>
+    private static async Task WriteStaticDockerfileAsync(string sourceDir, CancellationToken ct)
+    {
+        await File.WriteAllTextAsync(Path.Combine(sourceDir, "simploy-nginx.conf"), """
+        server {
+            listen 8080;
+            server_name _;
+            root /usr/share/nginx/html;
+            index index.html;
+            location / { try_files $uri /index.html; }
+            location /health { return 200 "ok"; }
+        }
+        """, ct);
+
+        await File.WriteAllTextAsync(Path.Combine(sourceDir, "Dockerfile"), """
+        FROM node:20-alpine AS build
+        WORKDIR /app
+        COPY package*.json ./
+        RUN npm ci || npm install
+        COPY . .
+        RUN npm run build
+
+        FROM nginx:alpine
+        COPY --from=build /app/dist /usr/share/nginx/html
+        COPY simploy-nginx.conf /etc/nginx/conf.d/default.conf
+        EXPOSE 8080
+        """, ct);
     }
 
     private async Task MaybeLoginAsync(AgentDeployRequest req, CancellationToken ct)
