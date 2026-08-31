@@ -38,6 +38,29 @@ public class EnvironmentsController(SimployDbContext db) : ControllerBase
         return NoContent();
     }
 
+    /// <summary>Sets the domains routed to this environment via Caddy.</summary>
+    [HttpPut("{id:guid}/domains")]
+    public async Task<IActionResult> SetDomains(Guid id, SetDomainsRequest req)
+    {
+        var e = await db.Environments.Include(x => x.Domains).FirstOrDefaultAsync(x => x.Id == id);
+        if (e is null) return NotFound();
+        var now = Guid.NewGuid();
+        e.Domains = req.Domains.Select(d => new Shared.Models.Domain
+        {
+            Id = Guid.NewGuid(),
+            EnvironmentId = id,
+            Host = d.Host,
+            TargetPort = d.TargetPort,
+            TargetService = d.TargetService,
+            IsStatic = d.IsStatic,
+            StaticRoot = d.StaticRoot,
+            Weighted = d.Weighted,
+            IsActive = true
+        }).ToList();
+        await db.SaveChangesAsync();
+        return NoContent();
+    }
+
     [HttpDelete("{id:guid}")]
     public async Task<IActionResult> Delete(Guid id)
     {

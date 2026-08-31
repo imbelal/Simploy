@@ -11,6 +11,8 @@ export default function Projects() {
   const [msg, setMsg] = useState('')
   const [envEdit, setEnvEdit] = useState<any>(null)
   const [envText, setEnvText] = useState('')
+  const [domEdit, setDomEdit] = useState<any>(null)
+  const [domText, setDomText] = useState('')
 
   const openEnvEdit = (e: any) => {
     setEnvEdit(e)
@@ -29,6 +31,26 @@ export default function Projects() {
     await api.envs.setEnv(envEdit.id, vars)
     setEnvEdit(null)
     setMsg(`Env vars saved for ${envEdit.name}`)
+    load()
+  }
+
+  const openDomEdit = (e: any) => {
+    setDomEdit(e)
+    setDomText((e.domains || []).map((d: any) => (d.targetPort ? `${d.host} ${d.targetPort}` : d.host)).join('\n'))
+  }
+  const saveDomains = async () => {
+    if (!domEdit) return
+    const domains: any[] = []
+    for (const line of domText.split('\n')) {
+      const t = line.trim()
+      if (!t) continue
+      const [host, port] = t.split(/\s+/).slice(0, 2)
+      if (!host) continue
+      domains.push({ host, targetPort: port ? +port : 80, isStatic: false, weighted: false, weight: 0 })
+    }
+    await api.envs.setDomains(domEdit.id, domains)
+    setDomEdit(null)
+    setMsg(`Domains saved for ${domEdit.name}`)
     load()
   }
 
@@ -152,6 +174,7 @@ export default function Projects() {
                       <div className="flex items-center gap-2 mt-2">
                         <Link to="/deployments" className="text-xs text-indigo-600 hover:underline font-medium">Deploy →</Link>
                         <button onClick={() => openEnvEdit(e)} className="text-xs text-indigo-600 hover:underline font-medium">Env vars</button>
+                        <button onClick={() => openDomEdit(e)} className="text-xs text-indigo-600 hover:underline font-medium">Domains</button>
                       </div>
                     </div>
                   ))}
@@ -173,6 +196,20 @@ export default function Projects() {
             <div className="flex justify-end gap-3 mt-4">
               <Button variant="secondary" onClick={() => setEnvEdit(null)}>Cancel</Button>
               <Button variant="primary" onClick={saveEnv}>Save</Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {domEdit && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-sm p-4">
+          <div className="bg-white rounded-2xl shadow-deep w-full max-w-md p-5">
+            <div className="font-semibold text-slate-900 mb-1">Domains — {domEdit.name}</div>
+            <div className="text-xs text-slate-500 mb-3">One per line as <code className="bg-slate-100 px-1 rounded font-mono">domain.tld</code> (or <code className="bg-slate-100 px-1 rounded font-mono">domain.tld 8080</code> to set the port Caddy proxies to).</div>
+            <textarea value={domText} onChange={e => setDomText(e.target.value)} rows={6} className={inputCls + ' font-mono text-xs'} placeholder={'api.example.com 8080'} />
+            <div className="flex justify-end gap-3 mt-4">
+              <Button variant="secondary" onClick={() => setDomEdit(null)}>Cancel</Button>
+              <Button variant="primary" onClick={saveDomains}>Save</Button>
             </div>
           </div>
         </div>

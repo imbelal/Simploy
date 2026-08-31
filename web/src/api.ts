@@ -25,6 +25,7 @@ export const api = {
     create: (b: any) => req<any>('/api/environments', { method: 'POST', body: JSON.stringify(b) }),
     del: (id: string) => req<any>(`/api/environments/${id}`, { method: 'DELETE' }),
     setEnv: (id: string, envVars: Record<string, string>) => req<any>(`/api/environments/${id}/env-vars`, { method: 'PUT', body: JSON.stringify({ envVars }) }),
+    setDomains: (id: string, domains: any[]) => req<any>(`/api/environments/${id}/domains`, { method: 'PUT', body: JSON.stringify({ domains }) }),
   },
   deployments: {
     list: (envId?: string) => req<any[]>(`/api/deployments${envId ? `?environmentId=${envId}` : ''}`),

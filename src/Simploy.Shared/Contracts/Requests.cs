@@ -4,6 +4,7 @@ public record CreateProjectRequest(string Name, string Slug, string ImageReposit
 public record CreateServerRequest(string Name, string Host, int SshPort, string SshUser);
 public record CreateEnvironmentRequest(Guid ProjectId, Guid ServerId, string Name, string Slot, string ImageTag);
 public record SetEnvVarsRequest(Dictionary<string, string> EnvVars);
+public record SetDomainsRequest(List<DomainRouteRequest> Domains);
 public record CreateDeploymentRequest(Guid EnvironmentId, string ImageTag, string Strategy, string? CommitSha, int CanaryPercent = 50);
 
 /// <summary>
