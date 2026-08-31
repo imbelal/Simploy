@@ -11,7 +11,7 @@ public class EnvironmentsController(SimployDbContext db) : ControllerBase
 {
     [HttpGet]
     public async Task<IEnumerable<Shared.Models.Environment>> List([FromQuery] Guid? projectId) =>
-        await db.Environments.Include(e => e.Server).Include(e => e.Domains)
+        await db.Environments.Include(e => e.Server).Include(e => e.Project).Include(e => e.Domains)
             .Where(e => projectId == null || e.ProjectId == projectId).ToListAsync();
 
     [HttpPost]

@@ -13,19 +13,25 @@ const statusInfo: Record<string, { label: string; tone: 'pending' | 'blue' | 'ok
 }
 
 export default function Deployments() {
+  const [projects, setProjects] = useState<any[]>([])
   const [envs, setEnvs] = useState<any[]>([])
   const [deps, setDeps] = useState<any[]>([])
   const [imageTag, setImageTag] = useState('prod-' + Math.random().toString(36).slice(2, 7))
+  const [projectId, setProjectId] = useState('')
   const [envId, setEnvId] = useState('')
   const [msg, setMsg] = useState('')
 
   const load = async () => {
+    const p = await api.projects.list().catch(() => [])
+    setProjects(p); if (p[0] && !projectId) setProjectId(p[0].id)
     const e = await api.envs.list().catch(() => [])
     setEnvs(e); if (e[0] && !envId) setEnvId(e[0].id)
     const d = await api.deployments.list().catch(() => [])
     setDeps(d)
   }
   useEffect(() => { load(); const i = setInterval(load, 3000); return () => clearInterval(i) }, [])
+
+  const filteredEnvs = projectId ? envs.filter((e: any) => e.projectId === projectId) : envs
 
   const deploy = async (strategy: string) => {
     if (!envId) return setMsg('Pick an environment first')
@@ -40,24 +46,30 @@ export default function Deployments() {
 
       <Panel>
         <div className="font-semibold text-slate-900 mb-4">Trigger a deploy</div>
-        {envs.length === 0 ? (
+        {projects.length === 0 ? (
           <div className="rounded-xl bg-amber-50 border border-amber-200 p-4 text-sm text-amber-900 leading-relaxed">
-            You need an <span className="font-medium">environment</span> first — it links a <span className="font-medium">project</span> (your app) to a <span className="font-medium">server</span>.<br />
+            You need a <span className="font-medium">project</span> first — it's your app (git repo + Dockerfile), linked to a <span className="font-medium">server</span> via an environment.<br />
             <Link to="/projects" className="mt-2 inline-block text-indigo-700 underline font-medium">Go to Projects → create a project and add an environment</Link>
           </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <Field label="Environment" hint="Which project+server combo to deploy to.">
-              <select value={envId} onChange={e => setEnvId(e.target.value)} className={inputCls}>
-                {envs.map(e => <option key={e.id} value={e.id}>{e.name} ({e.slot}/{e.imageTag}) on {e.server?.name} {e.server?.host}</option>)}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <Field label="Project" hint="The app to deploy.">
+              <select value={projectId} onChange={e => setProjectId(e.target.value)} className={inputCls}>
+                {projects.map(p => <option key={p.id} value={p.id}>{p.name} ({p.slug})</option>)}
               </select>
             </Field>
-            <Field label="Image tag" hint="The tag for the built image, e.g. prod-abc123. Can be any label you like.">
+            <Field label="Environment" hint="Which server + slot to deploy to.">
+              <select value={envId} onChange={e => setEnvId(e.target.value)} className={inputCls}>
+                {filteredEnvs.map(e => <option key={e.id} value={e.id}>{e.name} ({e.slot}) on {e.server?.name} {e.server?.host}</option>)}
+                {filteredEnvs.length === 0 && <option value="">No environments in this project</option>}
+              </select>
+            </Field>
+            <Field label="Image tag" hint="The tag for the built image, e.g. prod-abc123. Any label works.">
               <input value={imageTag} onChange={e => setImageTag(e.target.value)} className={inputCls + ' font-mono'} placeholder="prod-abc123" />
             </Field>
           </div>
         )}
-        {envs.length > 0 && (
+        {filteredEnvs.length > 0 && (
           <div className="flex gap-3 mt-4 flex-wrap">
             <Button variant="primary" onClick={() => deploy('Recreate')} title="Rebuild and swap out">Recreate</Button>
             <Button variant="secondary" onClick={() => deploy('Canary')} title="Deploy alongside the old version, shift traffic gradually">Canary</Button>
