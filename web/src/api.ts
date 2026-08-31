@@ -1,4 +1,6 @@
-const API = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+// Empty => relative /api/... (proxied by nginx in the web container, so it works
+// from any host with no CORS issues). Set VITE_API_URL only for local `npm run dev`.
+const API = import.meta.env.VITE_API_URL ?? ''
 
 async function req<T>(path: string, opts?: RequestInit): Promise<T> {
   const res = await fetch(`${API}${path}`, { headers: { 'Content-Type': 'application/json' }, ...opts });

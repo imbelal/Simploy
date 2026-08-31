@@ -1,0 +1,5 @@
+# web build context — exclude dev env & generated dirs from the image
+.env
+node_modules
+dist
+logs
