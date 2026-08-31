@@ -111,15 +111,45 @@ public class DockerService(ILogger<DockerService> log)
         if (refsExist)
         {
             log.LogInformation("Fetching {Url} branch {Branch}", req.GitRepository, branch);
-            await RunAsync("git", $"-C {sourceDir} fetch --depth 1 origin {branch}", ct);
-            await RunAsync("git", $"-C {sourceDir} checkout {branch}", ct);
-            await RunAsync("git", $"-C {sourceDir} pull --ff-only origin {branch}", ct);
+            try
+            {
+                await RunAsync("git", $"-C {sourceDir} fetch --depth 1 origin {branch}", ct);
+                await RunAsync("git", $"-C {sourceDir} checkout {branch}", ct);
+                await RunAsync("git", $"-C {sourceDir} pull --ff-only origin {branch}", ct);
+            }
+            catch (Exception ex)
+            {
+                throw Redact(ex, req.GitToken);
+            }
         }
         else
         {
             log.LogInformation("Cloning {Url} branch {Branch}", req.GitRepository, branch);
-            await RunAsync("git", $"clone --depth 1 --branch {branch} {cloneUrl} {sourceDir}", ct);
+            try
+            {
+                await RunAsync("git", $"clone --depth 1 --branch {branch} {cloneUrl} {sourceDir}", ct);
+            }
+            catch (Exception)
+            {
+                // Branch may not exist (e.g. the repo's default is 'master'). Fall
+                // back to cloning the repo default branch.
+                log.LogWarning("Branch {Branch} not found on {Url}; cloning default branch", branch, req.GitRepository);
+                await RunAsync("git", $"clone --depth 1 {cloneUrl} {sourceDir}", ct);
+            }
         }
+    }
+
+    /// <summary>Strips credentials from a command error before it is surfaced, so a PAT
+    /// embedded in a clone URL is never written into the deployment log.</summary>
+    private static Exception Redact(Exception ex, string? secret)
+    {
+        if (string.IsNullOrEmpty(secret)) return ex;
+        var msg = ex.Message;
+        var changed = false;
+        var encoded = Uri.EscapeDataString(secret);
+        if (msg.Contains(encoded)) { msg = msg.Replace(encoded, "***"); changed = true; }
+        if (msg.Contains(secret)) { msg = msg.Replace(secret, "***"); changed = true; }
+        return changed ? new Exception(msg, ex.InnerException) : ex;
     }
 
     private async Task MaybeLoginAsync(AgentDeployRequest req, CancellationToken ct)
