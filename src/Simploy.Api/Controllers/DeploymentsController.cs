@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Simploy.Api.Data;
@@ -7,7 +8,7 @@ using Simploy.Shared.Models;
 
 namespace Simploy.Api.Controllers;
 
-[ApiController, Route("api/deployments")]
+[ApiController, Route("api/deployments"), Authorize]
 public class DeploymentsController(SimployDbContext db, DeploymentService deployer) : ControllerBase
 {
     [HttpGet]

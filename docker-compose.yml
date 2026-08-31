@@ -20,6 +20,12 @@ services:
       ASPNETCORE_ENVIRONMENT: Production
       ConnectionStrings__Default: "Host=postgres;Port=5432;Database=simploy;Username=postgres;Password=postgres"
       UseInMemoryDb: "false"
+      # Auth — set these (esp. on a public server) via a .env file or your shell.
+      Auth__JwtSecret: "${SIMPLOY_JWT_SECRET:-simploy-dev-jwt-secret-change-me-please-32chars}"
+      Auth__AdminUser: "${SIMPLOY_ADMIN_USER:-admin}"
+      Auth__AdminPassword: "${SIMPLOY_ADMIN_PASSWORD:-simploy-admin-change-me}"
+      # Token the API uses to talk to the Agent (:8089). Must match the Agent's Agent__Token.
+      Agent__Token: "${SIMPLOY_AGENT_TOKEN:-simploy-agent-token-change-me}"
     depends_on:
       postgres:
         condition: service_healthy

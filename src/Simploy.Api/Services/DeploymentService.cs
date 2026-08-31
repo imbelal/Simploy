@@ -1,4 +1,6 @@
 using System.Collections.Concurrent;
+using System.Net.Http.Headers;
+using System.Net.Http.Json;
 using Microsoft.EntityFrameworkCore;
 using Simploy.Api.Data;
 using Simploy.Shared.Contracts;
@@ -6,7 +8,7 @@ using Simploy.Shared.Models;
 
 namespace Simploy.Api.Services;
 
-public class DeploymentService(IServiceProvider sp, ILogger<DeploymentService> log)
+public class DeploymentService(IServiceProvider sp, IConfiguration config, ILogger<DeploymentService> log)
 {
     private readonly ConcurrentQueue<Guid> _queue = new();
 
@@ -68,7 +70,11 @@ public class DeploymentService(IServiceProvider sp, ILogger<DeploymentService> l
                 Domains: env.Domains.Select(d => new DomainRouteRequest(d.Host, d.TargetPort, d.TargetService, d.IsStatic, d.StaticRoot, d.Weighted, 0, d.EnableHttps)).ToList());
 
             using var http = new HttpClient { Timeout = TimeSpan.FromMinutes(10) };
-            var resp = await http.PostAsJsonAsync($"{agentUrl}/deploy", payload, ct);
+            using var reqMsg = new HttpRequestMessage(HttpMethod.Post, $"{agentUrl}/deploy") { Content = JsonContent.Create(payload) };
+            var agentToken = config["Agent:Token"] ?? "";
+            if (!string.IsNullOrEmpty(agentToken))
+                reqMsg.Headers.Authorization = new AuthenticationHeaderValue("Bearer", agentToken);
+            var resp = await http.SendAsync(reqMsg, ct);
             var body = await resp.Content.ReadAsStringAsync(ct);
             deployment.LogOutput = body;
             if (!resp.IsSuccessStatusCode)

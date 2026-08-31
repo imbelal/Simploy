@@ -18,6 +18,8 @@ AGENT_PORT="${AGENT_PORT:-8089}"
 INSTALL_DIR="${INSTALL_DIR:-/opt/simploy}"
 WORK="${WORK:-/tmp/simploy-install}"
 AGENT_CONTAINER="simploy-agent"
+# Must match the api service's Agent__Token in docker-compose.yml.
+AGENT_TOKEN="${AGENT_TOKEN:-${SIMPLOY_AGENT_TOKEN:-simploy-agent-token-change-me}}"
 
 info(){ printf '\033[0;36m[simploy]\033[0m %s\n' "$*"; }
 die(){ printf '\033[0;31m[simploy]\033[0m ERROR: %s\n' "$*" >&2; exit 1; }
@@ -76,6 +78,7 @@ docker run -d --name "$AGENT_CONTAINER" --restart unless-stopped \
   -v /var/run/docker.sock:/var/run/docker.sock \
   -v "${INSTALL_DIR}:/opt/simploy" \
   -e ASPNETCORE_HTTP_PORTS="${AGENT_PORT}" \
+  -e Agent__Token="${AGENT_TOKEN}" \
   "$AGENT_CONTAINER"
 
 # ---- 5. Verify ------------------------------------------------------------

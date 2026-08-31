@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Simploy.Api.Data;
@@ -5,7 +6,7 @@ using Simploy.Shared.Contracts;
 
 namespace Simploy.Api.Controllers;
 
-[ApiController, Route("api/environments")]
+[ApiController, Route("api/environments"), Authorize]
 public class EnvironmentsController(SimployDbContext db) : ControllerBase
 {
     [HttpGet]

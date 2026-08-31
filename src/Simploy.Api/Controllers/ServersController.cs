@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Simploy.Api.Data;
@@ -6,7 +7,7 @@ using Simploy.Shared.Models;
 
 namespace Simploy.Api.Controllers;
 
-[ApiController, Route("api/servers")]
+[ApiController, Route("api/servers"), Authorize]
 public class ServersController(SimployDbContext db) : ControllerBase
 {
     [HttpGet]
@@ -16,7 +17,7 @@ public class ServersController(SimployDbContext db) : ControllerBase
     public async Task<ActionResult<Server>> Get(Guid id) => await db.Servers.FindAsync(id) is { } s ? s : NotFound();
 
     /// <summary>Returns the agent one-liner installer: <c>curl .../api/servers/install | bash</c>.</summary>
-    [HttpGet("install")]
+    [HttpGet("install"), AllowAnonymous]
     public IActionResult InstallScript()
     {
         var asm = typeof(ServersController).Assembly;

@@ -60,4 +60,16 @@ Set `UseInMemoryDb=false` + `docker compose up` for postgres.
 - `GET  /api/servers/install` -> the agent installer script
 - `POST /api/servers/:id/check` -> ping agent :8089/health
 
-**Next:** Auth, SOPS for secrets, real compose templating for multi-service apps, GH webhook auto-deploy.
+## Authentication
+- **Control plane** (API/UI) requires login. A single admin account is configured via env
+  (`Auth__AdminUser`, `Auth__AdminPassword`, `Auth__JwtSecret`). The UI shows a login page;
+  the API returns a JWT and all `/api/*` endpoints are `[Authorize]` (except `/health` and
+  `/api/servers/install`).
+- **Agent** (`:8089`) requires a shared bearer token (`Agent__Token`). It must match on the
+  API (`Agent__Token`) and the Agent. `/health` stays public so the UI can check servers.
+
+Set these (esp. on a public server): `SIMPLOY_ADMIN_USER`, `SIMPLOY_ADMIN_PASSWORD`,
+`SIMPLOY_JWT_SECRET` (≥32 chars), and `SIMPLOY_AGENT_TOKEN` — must be identical on both the
+API and the Agent.
+
+**Next:** SOPS for secrets, real compose templating for multi-service apps, GH webhook auto-deploy.

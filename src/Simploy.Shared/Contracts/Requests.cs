@@ -6,6 +6,7 @@ public record CreateEnvironmentRequest(Guid ProjectId, Guid ServerId, string Nam
 public record SetEnvVarsRequest(Dictionary<string, string> EnvVars);
 public record SetDomainsRequest(List<DomainRouteRequest> Domains);
 public record CreateDeploymentRequest(Guid EnvironmentId, string ImageTag, string Strategy, string? CommitSha, int CanaryPercent = 50);
+public record LoginRequest(string Username, string Password);
 
 /// <summary>
 /// A domain mapped to an environment. Sent to the agent so it can render the

@@ -1,4 +1,7 @@
+using System.Text;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.IdentityModel.Tokens;
 using Simploy.Api.Data;
 using Simploy.Api.Services;
 
@@ -26,6 +29,22 @@ else
 builder.Services.AddSingleton<DeploymentService>();
 builder.Services.AddHostedService<DeploymentWorker>();
 
+// ---- JWT auth (single admin user from config) ----
+var jwtSecret = builder.Configuration["Auth:JwtSecret"] ?? "simploy-dev-secret-change-me";
+var jwtIssuer = builder.Configuration["Auth:JwtIssuer"] ?? "simploy";
+var jwtAudience = builder.Configuration["Auth:JwtAudience"] ?? "simploy";
+builder.Services.AddSingleton<AuthService>();
+builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
+    .AddJwtBearer(o => o.TokenValidationParameters = new TokenValidationParameters
+    {
+        ValidateIssuer = true, ValidIssuer = jwtIssuer,
+        ValidateAudience = true, ValidAudience = jwtAudience,
+        ValidateIssuerSigningKey = true,
+        IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtSecret)),
+        ValidateLifetime = true, ClockSkew = TimeSpan.FromMinutes(1)
+    });
+builder.Services.AddAuthorization();
+
 var app = builder.Build();
 
 if (app.Environment.IsDevelopment())
@@ -47,6 +66,8 @@ using (var scope = app.Services.CreateScope())
 }
 
 app.UseCors();
+app.UseAuthentication();
+app.UseAuthorization();
 app.MapControllers();
 
 // health for Simploy itself

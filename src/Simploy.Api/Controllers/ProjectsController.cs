@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Simploy.Api.Data;
@@ -6,7 +7,7 @@ using Simploy.Shared.Models;
 
 namespace Simploy.Api.Controllers;
 
-[ApiController, Route("api/projects")]
+[ApiController, Route("api/projects"), Authorize]
 public class ProjectsController(SimployDbContext db) : ControllerBase
 {
     [HttpGet]
