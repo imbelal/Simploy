@@ -46,7 +46,7 @@ export default function Projects() {
       if (!t) continue
       const [host, port] = t.split(/\s+/).slice(0, 2)
       if (!host) continue
-      domains.push({ host, targetPort: port ? +port : 80, isStatic: false, weighted: false, weight: 0 })
+      domains.push({ host, targetPort: port ? +port : 8080, isStatic: false, weighted: false, weight: 0 })
     }
     await api.envs.setDomains(domEdit.id, domains)
     setDomEdit(null)

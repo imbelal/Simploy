@@ -86,7 +86,10 @@ public class DockerService(ILogger<DockerService> log)
         }
 
         // ---- 4. Render Caddyfile for domain routing / weighted canary.
-        var caddyContent = ComposeRenderer.RenderCaddyfile(req, serviceName, hostPort);
+        // Target the actual compose service that hosts this app (e.g. 'webapi'),
+        // not the symbolic slug name.
+        var appService = composeFile is null ? serviceName : (FindAppService(composeContent, req.ImageRepository) ?? serviceName);
+        var caddyContent = ComposeRenderer.RenderCaddyfile(req, appService, hostPort);
         await File.WriteAllTextAsync(Path.Combine(sourceDir, "Caddyfile"), caddyContent, ct);
 
         // Compose files can declare 'external: true' networks that must already
@@ -259,6 +262,30 @@ public class DockerService(ILogger<DockerService> log)
     }
 
     /// <summary>Returns the service names whose image is SQL Server (run as root).</summary>
+    /// <summary>Returns the service name whose image matches the app's image repo.</summary>
+    private static string? FindAppService(string composeContent, string imageRepository)
+    {
+        var repoBase = imageRepository;
+        if (repoBase.Contains("://")) repoBase = repoBase[(repoBase.IndexOf("://") + 3)..];
+
+        var inServices = false;
+        string? current = null;
+        foreach (var raw in composeContent.Split('\n'))
+        {
+            var line = raw.TrimEnd();
+            if (string.IsNullOrWhiteSpace(line)) continue;
+            var indent = line.Length - line.TrimStart().Length;
+            var t = line.Trim();
+
+            if (!inServices) { if (indent == 0 && t.StartsWith("services:")) inServices = true; continue; }
+            if (indent == 0) break;
+            if (indent == 2 && t.EndsWith(":")) { current = t.TrimEnd(':'); continue; }
+            if (indent == 4 && t.StartsWith("image:") && current is not null && t.Contains(repoBase, StringComparison.OrdinalIgnoreCase))
+                return current;
+        }
+        return null;
+    }
+
     private static List<string> GetMssqlServices(string composeContent)
     {
         var result = new List<string>();
