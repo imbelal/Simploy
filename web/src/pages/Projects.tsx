@@ -36,7 +36,7 @@ export default function Projects() {
 
   const openDomEdit = (e: any) => {
     setDomEdit(e)
-    setDomText((e.domains || []).map((d: any) => (d.targetPort ? `${d.host} ${d.targetPort}` : d.host)).join('\n'))
+    setDomText((e.domains || []).map((d: any) => d.targetService ? `${d.host} ${d.targetService}` : d.targetPort ? `${d.host} ${d.targetPort}` : d.host).join('\n'))
   }
   const saveDomains = async () => {
     if (!domEdit) return
@@ -44,9 +44,13 @@ export default function Projects() {
     for (const line of domText.split('\n')) {
       const t = line.trim()
       if (!t) continue
-      const [host, port] = t.split(/\s+/).slice(0, 2)
+      const [host, target] = t.split(/\s+/).slice(0, 2)
       if (!host) continue
-      domains.push({ host, targetPort: port ? +port : 8080, isStatic: false, weighted: false, weight: 0 })
+      if (target && target.includes(':')) {
+        domains.push({ host, targetService: target, isStatic: false, weighted: false, weight: 0 })
+      } else {
+        domains.push({ host, targetPort: target ? +target : 8080, isStatic: false, weighted: false, weight: 0 })
+      }
     }
     await api.envs.setDomains(domEdit.id, domains)
     setDomEdit(null)
@@ -205,8 +209,8 @@ export default function Projects() {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-sm p-4">
           <div className="bg-white rounded-2xl shadow-deep w-full max-w-md p-5">
             <div className="font-semibold text-slate-900 mb-1">Domains — {domEdit.name}</div>
-            <div className="text-xs text-slate-500 mb-3">One per line as <code className="bg-slate-100 px-1 rounded font-mono">domain.tld</code> (or <code className="bg-slate-100 px-1 rounded font-mono">domain.tld 8080</code> to set the port Caddy proxies to).</div>
-            <textarea value={domText} onChange={e => setDomText(e.target.value)} rows={6} className={inputCls + ' font-mono text-xs'} placeholder={'api.example.com 8080'} />
+            <div className="text-xs text-slate-500 mb-3">One per line as <code className="bg-slate-100 px-1 rounded font-mono">domain.tld</code>, or <code className="bg-slate-100 px-1 rounded font-mono">domain.tld service:port</code> to route to a specific service (e.g. <code className="bg-slate-100 px-1 rounded font-mono">seq.example.com seq:80</code>).</div>
+            <textarea value={domText} onChange={e => setDomText(e.target.value)} rows={6} className={inputCls + ' font-mono text-xs'} placeholder={'api.example.com 8080\nseq.example.com seq:80'} />
             <div className="flex justify-end gap-3 mt-4">
               <Button variant="secondary" onClick={() => setDomEdit(null)}>Cancel</Button>
               <Button variant="primary" onClick={saveDomains}>Save</Button>
