@@ -106,14 +106,12 @@ public class DockerService(ILogger<DockerService> log)
         // exist (e.g. bd-shop-manager-network). Create any missing ones first.
         await EnsureExternalNetworksAsync(composeContent, ct);
 
-        // Shared proxy: generated composes join a single 'simploy-proxy' network that a
-        // Simploy-managed Caddy routes by domain. Ensure the network + Caddy exist and
+        // Shared proxy: generated composes (and anything joining 'simploy-proxy') are
+        // routed by the Simploy-managed Caddy. Ensure the network + Caddy exist and
         // register this app's domains as a fragment (picked up via Caddy 'import').
-        if (composeFile is null)
-        {
-            await EnsureSharedProxyAsync(ct);
+        await EnsureSharedProxyAsync(ct);
+        if (composeFile is null || composeContent.Contains("simploy-proxy", StringComparison.Ordinal))
             await WriteProxyFragmentAsync(req, appService, hostPort, ct);
-        }
 
         // SQL Server 2022 runs as non-root and can't write its host bind-mount data
         // dir (Access is denied). Run mssql services as root via a Simploy compose
