@@ -1,3 +1,5 @@
+using System.Security.Cryptography;
+using System.Text;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -67,8 +69,10 @@ public class DatabasesController(SimployDbContext db, DatabaseService dbService)
     private static string GeneratePassword()
     {
         const string chars = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789";
-        var rnd = System.Security.Cryptography.RandomNumberGenerator.GetInt32(int.MaxValue);
-        return new string(Enumerable.Range(0, 24).Select(_ => chars[rnd % chars.Length]).ToArray());
+        var sb = new StringBuilder(24);
+        for (int i = 0; i < 24; i++)
+            sb.Append(chars[RandomNumberGenerator.GetInt32(chars.Length)]);
+        return sb.ToString();
     }
 }
 
