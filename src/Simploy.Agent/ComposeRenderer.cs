@@ -52,10 +52,10 @@ public static class ComposeRenderer
         sb.AppendLine("      options:");
         sb.AppendLine("        max-size: \"10m\"");
         sb.AppendLine("        max-file: \"3\"");
-        RegisterService(sb, serviceName, hostPort, "simploy");
+        RegisterService(sb, serviceName, hostPort, "simploy-proxy");
         sb.AppendLine("networks:");
-        sb.AppendLine("  simploy:");
-        sb.AppendLine("    external: false");
+        sb.AppendLine("  simploy-proxy:");
+        sb.AppendLine("    external: true");
         return sb.ToString();
     }
 
@@ -72,16 +72,16 @@ public static class ComposeRenderer
         sb.AppendLine("    env_file: .env");
         sb.AppendLine($"    ports: [\"{hostPort}:{hostPort}\"]");
         sb.AppendLine("    restart: unless-stopped");
-        RegisterService(sb, $"{serviceName}-new", hostPort, "simploy");
+        RegisterService(sb, $"{serviceName}-new", hostPort, "simploy-proxy");
         sb.AppendLine($"  {serviceName}-old:");
         sb.AppendLine($"    image: \"{oldImage}\"");
         sb.AppendLine("    env_file: .env");
         sb.AppendLine("    restart: unless-stopped");
         sb.AppendLine("    profiles: [\"old\"]");
-        RegisterService(sb, $"{serviceName}-old", hostPort, "simploy");
+        RegisterService(sb, $"{serviceName}-old", hostPort, "simploy-proxy");
         sb.AppendLine("networks:");
-        sb.AppendLine("  simploy:");
-        sb.AppendLine("    external: false");
+        sb.AppendLine("  simploy-proxy:");
+        sb.AppendLine("    external: true");
         return sb.ToString();
     }
 

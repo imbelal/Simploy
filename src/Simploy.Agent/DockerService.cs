@@ -106,6 +106,15 @@ public class DockerService(ILogger<DockerService> log)
         // exist (e.g. bd-shop-manager-network). Create any missing ones first.
         await EnsureExternalNetworksAsync(composeContent, ct);
 
+        // Shared proxy: generated composes join a single 'simploy-proxy' network that a
+        // Simploy-managed Caddy routes by domain. Ensure the network + Caddy exist and
+        // register this app's domains as a fragment (picked up via Caddy 'import').
+        if (composeFile is null)
+        {
+            await EnsureSharedProxyAsync(ct);
+            await WriteProxyFragmentAsync(req, appService, hostPort, ct);
+        }
+
         // SQL Server 2022 runs as non-root and can't write its host bind-mount data
         // dir (Access is denied). Run mssql services as root via a Simploy compose
         // override so its setup works on a fresh VM without editing the app repo.
@@ -134,6 +143,9 @@ public class DockerService(ILogger<DockerService> log)
             try { await RunAsync("docker", $"compose -p {ComposeRenderer.Sanitize(req.Slot)} restart {svc}", sourceDir, ct); }
             catch (Exception ex) { log.LogWarning("Could not reload {Svc}: {Ex}", svc, ex.Message); }
         }
+
+        // Reload the shared proxy so this app's domains go live.
+        await ReloadSharedProxyAsync(ct);
 
         // ---- 6. Health gate.
         var healthTarget = oldImage is null ? $"{serviceName}:{hostPort}" : $"{serviceName}-new:{hostPort}";
@@ -292,6 +304,59 @@ public class DockerService(ILogger<DockerService> log)
             log.LogInformation("Creating external network {Network}", network);
             await RunAsync("docker", $"network create {network}", ct);
         }
+    }
+
+    private const string ProxyNetwork = "simploy-proxy";
+    private const string ProxyCaddy = "simploy-caddy";
+    private static readonly string ProxyDir = Path.Combine(BaseDir, ".proxy");
+    private static readonly string ProxyAppsDir = Path.Combine(BaseDir, ".proxy", "apps");
+
+    /// <summary>Creates the shared proxy network, base Caddyfile and Caddy container so all
+    /// Simploy-generated apps are routed by domain through one proxy.</summary>
+    private async Task EnsureSharedProxyAsync(CancellationToken ct)
+    {
+        try { await RunAsync("docker", $"network inspect {ProxyNetwork}", ct); }
+        catch { log.LogInformation("Creating shared proxy network {Network}", ProxyNetwork); await RunAsync("docker", $"network create {ProxyNetwork}", ct); }
+
+        Directory.CreateDirectory(ProxyAppsDir);
+        await File.WriteAllTextAsync(Path.Combine(ProxyDir, "Caddyfile"), "import /etc/caddy/apps/*.conf\n", ct);
+
+        try { await RunAsync("docker", $"inspect {ProxyCaddy}", ct); return; } // already running
+        catch { /* start it */ }
+
+        log.LogInformation("Starting shared proxy Caddy ({Name})", ProxyCaddy);
+        await RunAsync("docker",
+            $"run -d --name {ProxyCaddy} --restart unless-stopped --network {ProxyNetwork} " +
+            $"-p 80:80 -p 443:443 " +
+            $"-v {ProxyDir}/Caddyfile:/etc/caddy/Caddyfile " +
+            $"-v {ProxyAppsDir}:/etc/caddy/apps " +
+            $"caddy:latest", ct);
+    }
+
+    /// <summary>Writes this app's domain fragment into the shared proxy's config dir,
+    /// so the proxy can route to this app by name across the shared network.</summary>
+    private async Task WriteProxyFragmentAsync(AgentDeployRequest req, string appService, int port, CancellationToken ct)
+    {
+        if (req.Domains is null || req.Domains.Count == 0) return;
+        Directory.CreateDirectory(ProxyAppsDir);
+        var sb = new StringBuilder();
+        foreach (var d in req.Domains)
+        {
+            if (d.IsStatic || string.IsNullOrWhiteSpace(d.Host)) continue;
+            sb.AppendLine(d.EnableHttps ? $"{d.Host} {{" : $"http://{d.Host} {{");
+            var target = d.TargetService ?? $"{appService}:{port}";
+            sb.AppendLine($"    reverse_proxy {target}");
+            sb.AppendLine("}");
+            sb.AppendLine();
+        }
+        var file = Path.Combine(ProxyAppsDir, $"{ComposeRenderer.Sanitize(req.ProjectSlug)}-{ComposeRenderer.Sanitize(req.Slot)}.conf");
+        await File.WriteAllTextAsync(file, sb.ToString(), ct);
+        log.LogInformation("Wrote proxy fragment {File}", file);
+    }
+
+    private async Task ReloadSharedProxyAsync(CancellationToken ct)
+    {
+        await RunAsync("docker", $"exec {ProxyCaddy} caddy reload --config /etc/caddy/Caddyfile", ct);
     }
 
     private static List<string> GetExternalNetworks(string composeContent)
