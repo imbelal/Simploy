@@ -412,9 +412,11 @@ public class DockerService(IConfiguration config, ILogger<DockerService> log)
         log.LogInformation("Wrote proxy fragment {File}", file);
     }
 
+    // Restart reloads Caddy so newly written import fragments (domains) are always picked up
+    // (caddy reload does not reliably re-import new files in the apps dir).
     private async Task ReloadSharedProxyAsync(CancellationToken ct)
     {
-        await RunAsync("docker", $"exec {ProxyCaddy} caddy reload --config /etc/caddy/Caddyfile", ct);
+        await RunAsync("docker", $"restart {ProxyCaddy}", ct);
     }
 
     private static List<string> GetExternalNetworks(string composeContent)
