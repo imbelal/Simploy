@@ -248,7 +248,9 @@ public class DockerService(IConfiguration config, ILogger<DockerService> log)
         compose.AppendLine("    volumes:");
         compose.AppendLine($"      - {dataVolume}:{volumePath}");
         compose.AppendLine("    healthcheck:");
-        compose.AppendLine($"      test: [\"CMD-SHELL\", \"{healthcheck}\"]");
+        // YAML-escape the healthcheck shell command (it may contain double quotes).
+        var escaped = healthcheck.Replace("\\", "\\\\").Replace("\"", "\\\"");
+        compose.AppendLine($"      test: [\"CMD-SHELL\", \"{escaped}\"]");
         compose.AppendLine("      interval: 5s");
         compose.AppendLine("      timeout: 5s");
         compose.AppendLine("      retries: 20");
