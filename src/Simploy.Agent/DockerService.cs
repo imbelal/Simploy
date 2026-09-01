@@ -241,12 +241,18 @@ public class DockerService(ILogger<DockerService> log)
     {
         if (string.IsNullOrWhiteSpace(req.RegistryUsername) || string.IsNullOrWhiteSpace(req.RegistryPassword)) return;
 
-        // Derive the registry host without URI parsing: ImageRepository may be
-        // "ghcr.io/imbelal/app" (no scheme) or "https://ghcr.io/imbelal/app".
+        // Derive the registry host from the image repo. Only docker login when there is
+        // a real registry (host[:port]); a bare name (e.g. the project slug, or Docker
+        // Hub "user/repo") has no host and doesn't need a login for source-builds.
         var repo = req.ImageRepository ?? "";
         if (repo.Contains("://")) repo = repo[(repo.IndexOf("://") + 3)..];
-        var registry = repo.Split('/')[0];
-        if (string.IsNullOrWhiteSpace(registry)) return;
+        var parts = repo.Split('/');
+        var registry = parts[0];
+        if (parts.Length < 2 || (!registry.Contains('.') && !registry.Contains(':')))
+        {
+            log.LogWarning("No registry host detected in image repo {Repo}; skipping docker login", repo);
+            return;
+        }
 
         log.LogInformation("docker login {Registry} as {User}", registry, req.RegistryUsername);
         await RunAsync("docker", $"login {registry} -u {req.RegistryUsername} --password-stdin", ct: ct, stdin: req.RegistryPassword);
