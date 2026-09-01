@@ -23,7 +23,9 @@ public class GitHubAppService(IConfiguration cfg)
     private string Slug => cfg["GithubApp:Slug"] ?? "";
 
     public bool IsConfigured => !string.IsNullOrEmpty(AppId) && !string.IsNullOrEmpty(PrivateKeyPem);
-    public string InstallUrl => $"https://github.com/apps/{Slug}/installations/new?client_id={ClientId}";
+    // Owner install URL: works for your own app regardless of the slug (public /apps/... slug URL
+    // 404s when the slug differs or the app is private).
+    public string InstallUrl => $"https://github.com/settings/installations/{AppId}";
 
     /// <summary>Short-lived JWT for the GitHub App (iss = app id).</summary>
     public string CreateAppJwt()
