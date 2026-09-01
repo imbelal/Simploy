@@ -36,6 +36,8 @@ public class DockerService(ILogger<DockerService> log)
         var oldImage = req.Strategy.Equals("Canary", StringComparison.OrdinalIgnoreCase) && !string.IsNullOrWhiteSpace(req.PreviousImageTag)
             ? $"{req.ImageRepository}:{req.PreviousImageTag}"
             : null;
+        // The app's serving port. Multiple apps on one VM must use different ports.
+        var hostPort = req.Domains?.FirstOrDefault(d => !d.IsStatic && d.TargetPort.HasValue)?.TargetPort ?? 8080;
 
         // ---- 2. Make the image available.
         await MaybeLoginAsync(req, ct);
@@ -44,9 +46,9 @@ public class DockerService(ILogger<DockerService> log)
         if (!File.Exists(dockerfileFull) && File.Exists(Path.Combine(sourceDir, "package.json")))
         {
             // Static/frontend app with no Dockerfile: generate one (Node build ->
-            // nginx on 8080 with a /health endpoint), so it can be deployed as-is.
+            // nginx on hostPort with a /health endpoint), so it can be deployed as-is.
             log.LogInformation("No Dockerfile found; generating a static-site Dockerfile for {Repo}", req.GitRepository);
-            await WriteStaticDockerfileAsync(sourceDir, ct);
+            await WriteStaticDockerfileAsync(sourceDir, hostPort, ct);
             dockerfileFull = Path.Combine(sourceDir, "Dockerfile");
         }
 
@@ -78,7 +80,6 @@ public class DockerService(ILogger<DockerService> log)
         await File.WriteAllTextAsync(Path.Combine(sourceDir, ".env"), envContent, ct);
 
         var composeFile = FindComposeFile(sourceDir);
-        var hostPort = req.Domains?.FirstOrDefault(d => !d.IsStatic && d.TargetPort.HasValue)?.TargetPort ?? 8080;
 
         string composeContent;
         if (composeFile is null)
@@ -208,18 +209,18 @@ public class DockerService(ILogger<DockerService> log)
     }
 
     /// <summary>Writes a Dockerfile + nginx conf for a static frontend app that ships no
-    /// Dockerfile (e.g. a React build). Serves the built dist on port 8080 with a /health.</summary>
-    private static async Task WriteStaticDockerfileAsync(string sourceDir, CancellationToken ct)
+    /// Dockerfile (e.g. a React build). Serves the built dist on the given port with a /health.</summary>
+    private static async Task WriteStaticDockerfileAsync(string sourceDir, int port, CancellationToken ct)
     {
-        await File.WriteAllTextAsync(Path.Combine(sourceDir, "simploy-nginx.conf"), """
-        server {
-            listen 8080;
+        await File.WriteAllTextAsync(Path.Combine(sourceDir, "simploy-nginx.conf"), $"""
+        server {{
+            listen {port};
             server_name _;
             root /usr/share/nginx/html;
             index index.html;
-            location / { try_files $uri /index.html; }
-            location /health { return 200 "ok"; }
-        }
+            location / {{ try_files $uri /index.html; }}
+            location /health {{ return 200 "ok"; }}
+        }}
         """, ct);
 
         await File.WriteAllTextAsync(Path.Combine(sourceDir, "Dockerfile"), """
