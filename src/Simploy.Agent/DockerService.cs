@@ -212,16 +212,18 @@ public class DockerService(ILogger<DockerService> log)
     /// Dockerfile (e.g. a React build). Serves the built dist on the given port with a /health.</summary>
     private static async Task WriteStaticDockerfileAsync(string sourceDir, int port, CancellationToken ct)
     {
-        await File.WriteAllTextAsync(Path.Combine(sourceDir, "simploy-nginx.conf"), $"""
-        server {{
-            listen {port};
+        const string nginxConf = """
+        server {
+            listen __PORT__;
             server_name _;
             root /usr/share/nginx/html;
             index index.html;
-            location / {{ try_files $uri /index.html; }}
-            location /health {{ return 200 "ok"; }}
-        }}
-        """, ct);
+            location / { try_files $uri /index.html; }
+            location /health { return 200 "ok"; }
+        }
+        """;
+        await File.WriteAllTextAsync(Path.Combine(sourceDir, "simploy-nginx.conf"),
+            nginxConf.Replace("__PORT__", port.ToString()), ct);
 
         await File.WriteAllTextAsync(Path.Combine(sourceDir, "Dockerfile"), """
         FROM node:20-alpine AS build
@@ -234,8 +236,8 @@ public class DockerService(ILogger<DockerService> log)
         FROM nginx:alpine
         COPY --from=build /app/dist /usr/share/nginx/html
         COPY simploy-nginx.conf /etc/nginx/conf.d/default.conf
-        EXPOSE 8080
-        """, ct);
+        EXPOSE __PORT__
+        """.Replace("__PORT__", port.ToString()), ct);
     }
 
     private async Task MaybeLoginAsync(AgentDeployRequest req, CancellationToken ct)
