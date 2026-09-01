@@ -349,6 +349,8 @@ public class DockerService(IConfiguration config, ILogger<DockerService> log)
     private static readonly string ProxyDir = Path.Combine(BaseDir, ".proxy");
     private static readonly string ProxyAppsDir = Path.Combine(BaseDir, ".proxy", "apps");
 
+    public Task EnsureProxyAsync(CancellationToken ct) => EnsureSharedProxyAsync(ct);
+
     /// <summary>Creates the shared proxy network, base Caddyfile and Caddy container so all
     /// Simploy-generated apps are routed by domain through one proxy.</summary>
     private async Task EnsureSharedProxyAsync(CancellationToken ct)
