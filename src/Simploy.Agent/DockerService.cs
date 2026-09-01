@@ -53,7 +53,7 @@ public class DockerService(ILogger<DockerService> log)
             // Static/frontend app with no Dockerfile: generate one (Node build ->
             // nginx on hostPort with a /health endpoint), so it can be deployed as-is.
             log.LogInformation("No Dockerfile found; generating a static-site Dockerfile for {Repo}", req.GitRepository);
-            await WriteStaticDockerfileAsync(sourceDir, hostPort, ct);
+            await WriteStaticDockerfileAsync(sourceDir, hostPort, req.EnvVars, ct);
             dockerfileFull = Path.Combine(sourceDir, "Dockerfile");
         }
 
@@ -61,7 +61,11 @@ public class DockerService(ILogger<DockerService> log)
         {
             var buildCtx = Path.Combine(sourceDir, string.IsNullOrWhiteSpace(req.DockerContext) ? "." : req.DockerContext);
             log.LogInformation("Building {Image} from {Dockerfile} (ctx {Ctx})", image, dockerfileFull, buildCtx);
-            await BuildImageAsync(dockerfileFull, buildCtx, image, ct);
+            // VITE_* vars go in as build args -> process.env, which Vite treats as the
+            // highest priority (beats committed .env.production etc.).
+            var buildArgs = req.EnvVars?.Where(kv => kv.Key.StartsWith("VITE_", StringComparison.OrdinalIgnoreCase))
+                .ToDictionary(kv => kv.Key, kv => kv.Value);
+            await BuildImageAsync(dockerfileFull, buildCtx, image, ct, buildArgs);
         }
         else
         {
@@ -221,8 +225,9 @@ public class DockerService(ILogger<DockerService> log)
     }
 
     /// <summary>Writes a Dockerfile + nginx conf for a static frontend app that ships no
-    /// Dockerfile (e.g. a React build). Serves the built dist on the given port with a /health.</summary>
-    private static async Task WriteStaticDockerfileAsync(string sourceDir, int port, CancellationToken ct)
+    /// Dockerfile (e.g. a React build). Serves the built dist on the given port with a /health.
+    /// VITE_* env vars are declared as ARG/ENV so they're baked at build time.</summary>
+    private static async Task WriteStaticDockerfileAsync(string sourceDir, int port, IReadOnlyDictionary<string, string>? envs, CancellationToken ct)
     {
         const string nginxConf = """
         server {
@@ -237,19 +242,29 @@ public class DockerService(ILogger<DockerService> log)
         await File.WriteAllTextAsync(Path.Combine(sourceDir, "simploy-nginx.conf"),
             nginxConf.Replace("__PORT__", port.ToString()), ct);
 
-        await File.WriteAllTextAsync(Path.Combine(sourceDir, "Dockerfile"), """
-        FROM node:20-alpine AS build
-        WORKDIR /app
-        COPY package*.json ./
-        RUN npm ci || npm install
-        COPY . .
-        RUN npm run build
+        var args = new List<string>
+        {
+            "FROM node:20-alpine AS build",
+            "WORKDIR /app",
+            "COPY package*.json ./",
+            "RUN npm ci || npm install",
+            "COPY . .",
+            // VITE_* as ARG/ENV -> process.env, which Vite scores highest (beats .env*).
+            foreach (var kv in (envs ?? new Dictionary<string, string>()))
+                if (kv.Key.StartsWith("VITE_", StringComparison.OrdinalIgnoreCase))
+                {
+                    args.Add($"ARG {kv.Key}");
+                    args.Add($"ENV {kv.Key}=${kv.Key}");
+                }
+            "RUN npm run build",
+            "",
+            "FROM nginx:alpine",
+            "COPY --from=build /app/dist /usr/share/nginx/html",
+            "COPY simploy-nginx.conf /etc/nginx/conf.d/default.conf",
+            $"EXPOSE {port}",
+        };
 
-        FROM nginx:alpine
-        COPY --from=build /app/dist /usr/share/nginx/html
-        COPY simploy-nginx.conf /etc/nginx/conf.d/default.conf
-        EXPOSE __PORT__
-        """.Replace("__PORT__", port.ToString()), ct);
+        await File.WriteAllTextAsync(Path.Combine(sourceDir, "Dockerfile"), string.Join("\n", args), ct);
     }
 
     private async Task MaybeLoginAsync(AgentDeployRequest req, CancellationToken ct)
@@ -273,11 +288,12 @@ public class DockerService(ILogger<DockerService> log)
         await RunAsync("docker", $"login {registry} -u {req.RegistryUsername} --password-stdin", ct: ct, stdin: req.RegistryPassword);
     }
 
-    private async Task BuildImageAsync(string dockerfileFull, string buildCtx, string image, CancellationToken ct)
+    private async Task BuildImageAsync(string dockerfileFull, string buildCtx, string image, CancellationToken ct, IReadOnlyDictionary<string, string>? buildArgs = null)
     {
         // Force BuildKit so Dockerfiles using --mount / cache work (needs buildx).
         var env = new Dictionary<string, string> { ["DOCKER_BUILDKIT"] = "1", ["BUILDKIT_PROGRESS"] = "plain" };
-        var result = await RunAsync("docker", $"build -f {dockerfileFull} -t {image} {buildCtx}", ct: ct, env: env);
+        var args = string.Concat((buildArgs ?? new Dictionary<string, string>()).Select(kv => $" --build-arg {kv.Key}={kv.Value}"));
+        var result = await RunAsync("docker", $"build -f {dockerfileFull} -t {image} {buildCtx}{args}", ct: ct, env: env);
         log.LogInformation("Build result: {Result}", result.Trim());
     }
 
