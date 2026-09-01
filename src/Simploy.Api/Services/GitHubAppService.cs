@@ -87,6 +87,27 @@ public class GitHubAppService(IConfiguration cfg)
         }
         return list;
     }
+    /// <summary>Lists the repos the given installation can access (using its token).</summary>
+    public async Task<List<GitHubRepoDto>> ListRepositoriesAsync(string installationId, CancellationToken ct = default)
+    {
+        var token = await GetInstallationTokenAsync(installationId, ct);
+        using var http = new HttpClient { Timeout = TimeSpan.FromSeconds(20) };
+        http.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+        http.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/vnd.github+json"));
+        http.DefaultRequestHeaders.UserAgent.ParseAdd("simploy");
+        var json = await http.GetFromJsonAsync<JsonElement>("https://api.github.com/installation/repositories?per_page=100", ct);
+        var list = new List<GitHubRepoDto>();
+        foreach (var r in json.GetProperty("repositories").EnumerateArray())
+        {
+            list.Add(new GitHubRepoDto(
+                r.GetProperty("full_name").GetString()!,
+                r.GetProperty("name").GetString()!,
+                r.TryGetProperty("default_branch", out var b) ? b.GetString() ?? "main" : "main",
+                r.TryGetProperty("private", out var p) && p.GetBoolean()));
+        }
+        return list;
+    }
 }
 
 public record GitHubInstallationDto(string Id, string Account);
+public record GitHubRepoDto(string FullName, string Name, string DefaultBranch, bool IsPrivate);

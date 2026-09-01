@@ -33,6 +33,7 @@ export const api = {
   github: {
     install: () => req<any>('/api/github/install'),
     installations: () => req<any[]>('/api/github/installations'),
+    repositories: (installationId: string) => req<any[]>(`/api/github/repositories?installationId=${encodeURIComponent(installationId)}`),
     bindProject: (projectId: string, installationId: string) => req<any>(`/api/github/projects/${projectId}/installation`, { method: 'PUT', body: JSON.stringify({ installationId }) }),
   },
   servers: {

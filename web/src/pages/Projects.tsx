@@ -62,6 +62,7 @@ export default function Projects() {
   const load = () => {
     api.projects.list().then(setProjects).catch(e => setMsg(e.message))
     api.servers.list().then(setServers).catch(() => { })
+    api.github.installations().then(setGhInstalls).catch(() => { })
   }
   useEffect(() => { load() }, [])
 
@@ -99,6 +100,22 @@ export default function Projects() {
     window.location.href = r.url
   }
   const [ghInstalls, setGhInstalls] = useState<any[]>([])
+  const [ghRepos, setGhRepos] = useState<any[]>([])
+  const [ghInstall, setGhInstall] = useState('')
+  const [ghRepo, setGhRepo] = useState('')
+
+  const loadGhRepos = async (installationId?: string) => {
+    const id = installationId || ghInstall
+    if (!id) return
+    try { setGhRepos(await api.github.repositories(id)) } catch (e: any) { setMsg(e.message) }
+  }
+  const importRepo = (fullName: string) => {
+    const name = fullName.split('/')[1] || fullName
+    const slug = name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')
+    setForm(f => ({ ...f, name, slug, imageRepository: f.imageRepository || slug, gitRepository: `https://github.com/${fullName}` }))
+    setMsg(`Imported ${fullName} — set the Dockerfile/context (or it'll auto-detect static)`)
+  }
+
   const [ghProject, setGhProject] = useState<any>(null)
   const [ghChoice, setGhChoice] = useState('')
   const openGhBind = async (p: any) => {
@@ -117,6 +134,23 @@ export default function Projects() {
 
       <Panel>
         <div className="font-semibold text-slate-900 mb-4">Create a project</div>
+
+        <div className="mb-5 rounded-xl border border-indigo-100 bg-indigo-50/40 p-4">
+          <div className="flex items-center gap-2 text-sm font-medium text-slate-800 mb-1">
+            <span className="text-indigo-500">◆</span> Import from GitHub <span className="text-xs text-slate-500 font-normal">(uses the connected GitHub App — no PAT)</span>
+          </div>
+          <div className="flex gap-3 flex-wrap text-xs mt-1">
+            <select value={ghInstall} onChange={e => { setGhInstall(e.target.value); loadGhRepos(e.target.value) }} className={inputCls + ' w-auto'}>
+              <option value="">GitHub account / installation…</option>
+              {ghInstalls.map((i: any) => <option key={i.id} value={i.id}>{i.account} (#{i.id})</option>)}
+            </select>
+            <select value={ghRepo} onChange={e => { setGhRepo(e.target.value); if (e.target.value) importRepo(e.target.value) }} className={inputCls + ' w-auto min-w-[220px]'}>
+              <option value="">Select a repository…</option>
+              {ghRepos.map((r: any) => <option key={r.fullName} value={r.fullName}>{r.fullName}</option>)}
+            </select>
+          </div>
+        </div>
+
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <Field label="Project name" hint="Display name, e.g. BdShopManager">
             <input className={inputCls} value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} />

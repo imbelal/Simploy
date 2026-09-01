@@ -30,6 +30,14 @@ public class GitHubController(SimployDbContext db, GitHubAppService github) : Co
         return Ok(await github.ListInstallationsAsync(ct));
     }
 
+    /// <summary>Lists the repos an installation can access (for the project-import picker).</summary>
+    [HttpGet("repositories")]
+    public async Task<IActionResult> Repositories([FromQuery] string installationId, CancellationToken ct)
+    {
+        if (!github.IsConfigured) return BadRequest(new { error = "GitHub App is not configured" });
+        return Ok(await github.ListRepositoriesAsync(installationId, ct));
+    }
+
     /// <summary>Binds a project to a GitHub App installation (used to mint tokens on deploy).</summary>
     [HttpPut("projects/{projectId:guid}/installation")]
     public async Task<IActionResult> BindProject(Guid projectId, BindInstallationRequest req)
