@@ -140,16 +140,17 @@ export default function Projects() {
 
         <label className="flex items-center gap-2.5 mt-5 text-sm font-medium text-slate-700 cursor-pointer">
           <input type="checkbox" checked={showPrivate} onChange={e => setShowPrivate(e.target.checked)} className="rounded text-indigo-600 focus:ring-indigo-500" />
-          This is a private repo / private registry — let me set access tokens
+          This private repo / registry needs access credentials (PAT)
         </label>
 
         {showPrivate && (
           <div className="mt-3 p-4 bg-amber-50/60 border border-amber-200 rounded-xl space-y-4">
             <div className="text-xs text-amber-800 leading-relaxed">
-              <b>Private Git repo</b> → a token with <code>repo</code> scope (classic PAT or fine-grained). <b>Private registry</b> (e.g. GHCR) → username + PAT with <code>read:packages</code>. Leave blank for public repos/images.
+              <b>GitHub App connected?</b> You don't need a Git token — install + bind the GitHub App on the project card instead, and leave the Git token blank.<br />
+              Otherwise: <b>private Git repo</b> → a PAT with <code>repo</code> scope. <b>Private registry</b> (e.g. GHCR) → username + PAT with <code>read:packages</code>. Leave everything blank for public repos/images.
             </div>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <Field label="Git token" hint="Used for git clone of the private repo.">
+              <Field label="Git token (only if not using GitHub App)" hint="Leave blank if this project is bound to a GitHub App installation.">
                 <input className={inputCls} placeholder="ghp_... or github_pat_..." type="password" value={form.gitToken} onChange={e => setForm({ ...form, gitToken: e.target.value })} />
               </Field>
               <Field label="Registry username">
