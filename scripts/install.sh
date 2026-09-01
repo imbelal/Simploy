@@ -84,6 +84,7 @@ docker run -d --name "$AGENT_CONTAINER" --restart unless-stopped \
   -v "${INSTALL_DIR}:/opt/simploy" \
   -e ASPNETCORE_HTTP_PORTS="${AGENT_PORT}" \
   -e Agent__Token="${AGENT_TOKEN}" \
+  -e ControlPlane__Domain="${SIMPLOY_CONTROL_DOMAIN:-}" \
   "$AGENT_CONTAINER"
 
 # ---- 5. Verify ------------------------------------------------------------

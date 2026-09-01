@@ -40,6 +40,14 @@ services:
     build: { context: ./web, dockerfile: Dockerfile }
     ports: ["5173:80"]
     depends_on: [api]
+    networks:
+      - default
+      simploy-proxy:
+        aliases: [simploy-control]
 
 volumes:
   pgdata:
+
+networks:
+  simploy-proxy:
+    external: true

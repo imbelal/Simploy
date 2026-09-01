@@ -11,7 +11,7 @@ namespace Simploy.Agent;
 /// image when a Dockerfile is present), otherwise pulls a prebuilt image, writes
 /// a docker-compose.yml + .env + Caddyfile, runs the stack and gates on health.
 /// </summary>
-public class DockerService(ILogger<DockerService> log)
+public class DockerService(IConfiguration config, ILogger<DockerService> log)
 {
     private const string BaseDir = "/opt/simploy";
 
@@ -358,6 +358,15 @@ public class DockerService(ILogger<DockerService> log)
 
         Directory.CreateDirectory(ProxyAppsDir);
         await File.WriteAllTextAsync(Path.Combine(ProxyDir, "Caddyfile"), "import /etc/caddy/apps/*.conf\n", ct);
+
+        // Serve the Simploy control plane on its own domain (if configured) via the proxy.
+        var controlDomain = config["ControlPlane:Domain"];
+        if (!string.IsNullOrWhiteSpace(controlDomain))
+        {
+            var controlConf = $"{controlDomain.Trim()} {{\n    reverse_proxy simploy-control:80\n}}\n";
+            await File.WriteAllTextAsync(Path.Combine(ProxyAppsDir, "simploy-control.conf"), controlConf, ct);
+            log.LogInformation("Control plane domain: {Domain}", controlDomain);
+        }
 
         try { await RunAsync("docker", $"inspect {ProxyCaddy}", ct); return; } // already running
         catch { /* start it */ }
