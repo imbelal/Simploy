@@ -94,6 +94,23 @@ export default function Projects() {
     load()
   }
 
+  const githubInstall = async () => {
+    const r: any = await api.github.install()
+    window.location.href = r.url
+  }
+  const [ghInstalls, setGhInstalls] = useState<any[]>([])
+  const [ghProject, setGhProject] = useState<any>(null)
+  const [ghChoice, setGhChoice] = useState('')
+  const openGhBind = async (p: any) => {
+    try { setGhInstalls(await api.github.installations()); setGhProject(p); setGhChoice('') }
+    catch (e: any) { setMsg('GitHub App not configured: ' + e.message) }
+  }
+  const doGhBind = async () => {
+    if (!ghProject || !ghChoice) return
+    await api.github.bindProject(ghProject.id, ghChoice)
+    setGhProject(null); setMsg('GitHub App installation bound'); load()
+  }
+
   return (
     <div className="space-y-6">
       <PageHeader title="Projects" desc="A project is one app. Point Simploy at its Git repo (build from source) or a registry image (pull). Each project can be deployed to many servers." />
@@ -165,6 +182,15 @@ export default function Projects() {
                 <span>Context: <code className="bg-slate-100 px-1.5 rounded font-mono text-[11px]">{p.dockerContext || '.'}</code></span>
                 {p.gitRepository && <span className="font-mono text-[11px] text-slate-400">← {p.gitRepository}</span>}
                 {(p.gitToken || p.registryPassword) && <Badge tone="amber">private</Badge>}
+                {p.githubInstallationId && <Badge tone="violet">GitHub App</Badge>}
+              </div>
+
+              <div className="flex items-center gap-2 mt-2 text-xs">
+                <button onClick={githubInstall} className="text-indigo-600 hover:underline font-medium">Install GitHub App</button>
+                <span className="text-slate-300">·</span>
+                <button onClick={() => openGhBind(p)} className="text-indigo-600 hover:underline font-medium">Bind installation</button>
+                {p.githubInstallationId && <span className="text-slate-400">(bound: {p.githubInstallationId})</span>}
+                <span className="text-slate-400">{p.gitToken ? '· Using PAT instead' : ''}</span>
               </div>
 
               <div className="mt-4">
@@ -215,6 +241,22 @@ export default function Projects() {
             <div className="flex justify-end gap-3 mt-4">
               <Button variant="secondary" onClick={() => setDomEdit(null)}>Cancel</Button>
               <Button variant="primary" onClick={saveDomains}>Save</Button>
+            </div>
+          </div>
+        </div>
+      )}
+      {ghProject && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-sm p-4">
+          <div className="bg-white rounded-2xl shadow-deep w-full max-w-md p-5">
+            <div className="font-semibold text-slate-900 mb-1">Bind GitHub App — {ghProject.name}</div>
+            <div className="text-xs text-slate-500 mb-3">If you haven't installed the app yet, click "Install GitHub App" first, then reload this list.</div>
+            <select value={ghChoice} onChange={e => setGhChoice(e.target.value)} className={inputCls}>
+              <option value="">Select an installation…</option>
+              {ghInstalls.map((i: any) => <option key={i.id} value={i.id}>{i.account} (#{i.id})</option>)}
+            </select>
+            <div className="flex justify-end gap-3 mt-4">
+              <Button variant="secondary" onClick={() => setGhProject(null)}>Cancel</Button>
+              <Button variant="primary" onClick={doGhBind} disabled={!ghChoice}>Bind</Button>
             </div>
           </div>
         </div>

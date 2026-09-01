@@ -12,6 +12,8 @@ public class Project
     public string? DockerContext { get; set; } = ".";
     // Private repo / registry auth (stored encrypted in prod, plaintext for demo)
     public string? GitToken { get; set; } // PAT classic with repo scope for private clone
+    // When using a GitHub App instead of a PAT, the installation granting access to the repo.
+    public string? GithubInstallationId { get; set; }
     public string? RegistryUsername { get; set; } // ghcr user (for docker login)
     public string? RegistryPassword { get; set; } // GHCR PAT (ghcr_pat)
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;

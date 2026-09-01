@@ -27,6 +27,7 @@ else
     builder.Services.AddDbContext<SimployDbContext>(o => o.UseNpgsql(builder.Configuration.GetConnectionString("Default")));
 
 builder.Services.AddSingleton<DeploymentService>();
+builder.Services.AddSingleton<GitHubAppService>();
 builder.Services.AddHostedService<DeploymentWorker>();
 
 // ---- JWT auth (single admin user from config) ----
@@ -58,7 +59,7 @@ using (var scope = app.Services.CreateScope())
     // EnsureCreated does not alter an existing database, so apply lightweight
     // additive schema changes here (idempotent, Postgres only).
     if (db.Database.IsRelational())
-        db.Database.ExecuteSqlRaw("ALTER TABLE \"Domains\" ADD COLUMN IF NOT EXISTS \"EnableHttps\" boolean NOT NULL DEFAULT false;");
+        db.Database.ExecuteSqlRaw("ALTER TABLE \"Domains\" ADD COLUMN IF NOT EXISTS \"EnableHttps\" boolean NOT NULL DEFAULT false; ALTER TABLE \"Projects\" ADD COLUMN IF NOT EXISTS \"GithubInstallationId\" text NULL;");
     // Only seed demo data in Development (local `dotnet run`). Production/VM
     // deployments start empty: you add your real servers & projects in the UI.
     if (app.Environment.IsDevelopment())

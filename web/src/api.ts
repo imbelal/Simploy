@@ -30,6 +30,11 @@ async function req<T>(path: string, opts?: RequestInit, isLogin = false): Promis
 }
 
 export const api = {
+  github: {
+    install: () => req<any>('/api/github/install'),
+    installations: () => req<any[]>('/api/github/installations'),
+    bindProject: (projectId: string, installationId: string) => req<any>(`/api/github/projects/${projectId}/installation`, { method: 'PUT', body: JSON.stringify({ installationId }) }),
+  },
   servers: {
     list: () => req<any[]>('/api/servers'),
     create: (b: any) => req<any>('/api/servers', { method: 'POST', body: JSON.stringify(b) }),

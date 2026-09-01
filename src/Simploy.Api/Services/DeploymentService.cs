@@ -8,7 +8,7 @@ using Simploy.Shared.Models;
 
 namespace Simploy.Api.Services;
 
-public class DeploymentService(IServiceProvider sp, IConfiguration config, ILogger<DeploymentService> log)
+public class DeploymentService(IServiceProvider sp, IConfiguration config, GitHubAppService github, ILogger<DeploymentService> log)
 {
     private readonly ConcurrentQueue<Guid> _queue = new();
 
@@ -51,6 +51,16 @@ public class DeploymentService(IServiceProvider sp, IConfiguration config, ILogg
                     .FirstOrDefaultAsync(ct)
                 : null;
 
+            // If the project uses a GitHub App installation (and no PAT), mint a short-lived
+            // installation token to clone the repo with. Falls back to the PAT if set.
+            var gitToken = env.Project.GitToken;
+            if (string.IsNullOrEmpty(gitToken) && !string.IsNullOrEmpty(env.Project.GithubInstallationId)
+                && github.IsConfigured)
+            {
+                try { gitToken = await github.GetInstallationTokenAsync(env.Project.GithubInstallationId!, ct); }
+                catch (Exception ex) { throw new Exception($"GitHub App token: {ex.Message}", ex); }
+            }
+
             var payload = new AgentDeployRequest(
                 ProjectSlug: env.Project.Slug,
                 Slot: env.Slot,
@@ -61,7 +71,7 @@ public class DeploymentService(IServiceProvider sp, IConfiguration config, ILogg
                 PreviousImageTag: previousImageTag,
                 GitRepository: env.Project.GitRepository,
                 GitBranch: env.Branch,
-                GitToken: env.Project.GitToken,
+                GitToken: gitToken,
                 DockerfilePath: env.Project.DockerfilePath,
                 DockerContext: env.Project.DockerContext,
                 RegistryUsername: env.Project.RegistryUsername,

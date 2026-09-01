@@ -26,6 +26,12 @@ services:
       Auth__AdminPassword: "${SIMPLOY_ADMIN_PASSWORD:-simploy-admin-change-me}"
       # Token the API uses to talk to the Agent (:8089). Must match the Agent's Agent__Token.
       Agent__Token: "${SIMPLOY_AGENT_TOKEN:-simploy-agent-token-change-me}"
+      # Optional GitHub App (replaces PATs for private repos). See README.
+      GithubApp__AppId: "${SIMPLOY_GH_APP_ID:-}"
+      GithubApp__ClientId: "${SIMPLOY_GH_CLIENT_ID:-}"
+      GithubApp__ClientSecret: "${SIMPLOY_GH_CLIENT_SECRET:-}"
+      GithubApp__Slug: "${SIMPLOY_GH_SLUG:-}"
+      GithubApp__PrivateKey: "${SIMPLOY_GH_PRIVATE_KEY:-}"
     depends_on:
       postgres:
         condition: service_healthy

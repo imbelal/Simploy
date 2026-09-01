@@ -72,4 +72,26 @@ Set these (esp. on a public server): `SIMPLOY_ADMIN_USER`, `SIMPLOY_ADMIN_PASSWO
 `SIMPLOY_JWT_SECRET` (≥32 chars), and `SIMPLOY_AGENT_TOKEN` — must be identical on both the
 API and the Agent.
 
+### GitHub App (recommended over PATs for private repos)
+Replace long-lived PATs with a GitHub App that issues short-lived, repo-scoped tokens automatically.
+
+1. Register a **GitHub App** (GitHub → Settings → Developer settings → GitHub Apps → New GitHub App):
+   - Set the **Setup URL** to `https://<your-simploy>/api/github/callback`.
+   - Under **Repository permissions** grant **Contents: Read-only**.
+   - Generate a **Private Key** and download the `.pem`.
+2. In Simploy's env (or `.env`) set:
+   ```bash
+   SIMPLOY_GH_APP_ID=<app id>
+   SIMPLOY_GH_CLIENT_ID=<client id>
+   SIMPLOY_GH_CLIENT_SECRET=<client secret>
+   SIMPLOY_GH_SLUG=<app-slug>          # from the app's URL, e.g. my-simploy
+   SIMPLOY_GH_PRIVATE_KEY="$(cat app.pem | tr '\n' ' ')"   # PEM (newlines escaped)
+   ```
+3. In the UI → **Projects** → **Install GitHub App** → authorize + choose the repos.
+4. **Bind installation** → pick the installation in the project.
+
+On deploy, Simploy mints a short-lived installation token and clones with it. No PAT needed;
+leave the project's Git token blank. (We recommend moving the private key to an encrypted
+secret store — see Next.)
+
 **Next:** SOPS for secrets, real compose templating for multi-service apps, GH webhook auto-deploy.
