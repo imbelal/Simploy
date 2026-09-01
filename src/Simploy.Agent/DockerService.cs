@@ -249,20 +249,25 @@ public class DockerService(ILogger<DockerService> log)
             "COPY package*.json ./",
             "RUN npm ci || npm install",
             "COPY . .",
-            // VITE_* as ARG/ENV -> process.env, which Vite scores highest (beats .env*).
-            foreach (var kv in (envs ?? new Dictionary<string, string>()))
-                if (kv.Key.StartsWith("VITE_", StringComparison.OrdinalIgnoreCase))
-                {
-                    args.Add($"ARG {kv.Key}");
-                    args.Add($"ENV {kv.Key}=${kv.Key}");
-                }
+        };
+
+        // VITE_* as ARG/ENV -> process.env, which Vite scores highest (beats .env*).
+        foreach (var kv in envs ?? new Dictionary<string, string>())
+            if (kv.Key.StartsWith("VITE_", StringComparison.OrdinalIgnoreCase))
+            {
+                args.Add($"ARG {kv.Key}");
+                args.Add($"ENV {kv.Key}=${kv.Key}");
+            }
+
+        args.AddRange(new[]
+        {
             "RUN npm run build",
             "",
             "FROM nginx:alpine",
             "COPY --from=build /app/dist /usr/share/nginx/html",
             "COPY simploy-nginx.conf /etc/nginx/conf.d/default.conf",
             $"EXPOSE {port}",
-        };
+        });
 
         await File.WriteAllTextAsync(Path.Combine(sourceDir, "Dockerfile"), string.Join("\n", args), ct);
     }
