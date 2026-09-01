@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { api } from '../api'
 import { Badge, Button, Card, EmptyState, Field, PageHeader, Panel, inputCls } from '../components/Field'
@@ -20,22 +20,41 @@ export default function Deployments() {
   const [projectId, setProjectId] = useState('')
   const [envId, setEnvId] = useState('')
   const [msg, setMsg] = useState('')
+  const projectRef = useRef('')
+  const envRef = useRef('')
+
+  // Load the environments of a project and keep the previous env if still valid,
+  // otherwise auto-select the first one.
+  const applyEnv = (list: any[]) => {
+    const keep = envRef.current && list.some((e: any) => e.id === envRef.current)
+    const id = keep ? envRef.current : list[0]?.id ?? ''
+    envRef.current = id
+    setEnvId(id)
+  }
+  const loadEnvs = async (pid: string) => {
+    const e = await api.envs.list(pid || undefined).catch(() => [])
+    setEnvs(e)
+    applyEnv(e)
+  }
 
   const load = async () => {
     const p = await api.projects.list().catch(() => [])
     setProjects(p)
-    // Only default to the first item once; never override a user selection.
-    setProjectId(prev => (prev ? prev : p[0]?.id ?? ''))
-    const e = await api.envs.list().catch(() => [])
-    setEnvs(e)
-    setEnvId(prev => (prev ? prev : e[0]?.id ?? ''))
-    const d = await api.deployments.list().catch(() => [])
-    setDeps(d)
+    // Default to the first project once; never override a user selection.
+    if (!projectRef.current && p[0]) { projectRef.current = p[0].id; setProjectId(p[0].id) }
+    await loadEnvs(projectRef.current)
+    setDeps(await api.deployments.list().catch(() => []))
   }
   useEffect(() => { load(); const i = setInterval(load, 3000); return () => clearInterval(i) }, [])
 
-  const filteredEnvs = projectId ? envs.filter((e: any) => e.projectId === projectId) : envs
-  const projectEnvIds = new Set(filteredEnvs.map((e: any) => e.id))
+  const onProject = (pid: string) => {
+    projectRef.current = pid
+    setProjectId(pid)
+    envRef.current = ''          // force a fresh selection for the new project
+    loadEnvs(pid)
+  }
+
+  const projectEnvIds = new Set(envs.map((e: any) => e.id))
   const visibleDeps = projectId ? deps.filter((d: any) => projectEnvIds.has(d.environmentId)) : deps
 
   const deploy = async (strategy: string) => {
@@ -59,14 +78,14 @@ export default function Deployments() {
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <Field label="Project" hint="The app to deploy.">
-              <select value={projectId} onChange={e => setProjectId(e.target.value)} className={inputCls}>
+              <select value={projectId} onChange={e => onProject(e.target.value)} className={inputCls}>
                 {projects.map(p => <option key={p.id} value={p.id}>{p.name} ({p.slug})</option>)}
               </select>
             </Field>
             <Field label="Environment" hint="Which server + slot to deploy to.">
-              <select value={envId} onChange={e => setEnvId(e.target.value)} className={inputCls}>
-                {filteredEnvs.map(e => <option key={e.id} value={e.id}>{e.name} ({e.slot}) on {e.server?.name} {e.server?.host}</option>)}
-                {filteredEnvs.length === 0 && <option value="">No environments in this project</option>}
+              <select value={envId} onChange={e => { envRef.current = e.target.value; setEnvId(e.target.value) }} className={inputCls}>
+                {envs.map(e => <option key={e.id} value={e.id}>{e.name} ({e.slot}) on {e.server?.name} {e.server?.host}</option>)}
+                {envs.length === 0 && <option value="">No environments in this project</option>}
               </select>
             </Field>
             <Field label="Image tag" hint="The tag for the built image, e.g. prod-abc123. Any label works.">
@@ -74,7 +93,7 @@ export default function Deployments() {
             </Field>
           </div>
         )}
-        {filteredEnvs.length > 0 && (
+        {envs.length > 0 && (
           <div className="flex gap-3 mt-4 flex-wrap">
             <Button variant="primary" onClick={() => deploy('Recreate')} title="Rebuild and swap out">Recreate</Button>
             <Button variant="secondary" onClick={() => deploy('Canary')} title="Deploy alongside the old version, shift traffic gradually">Canary</Button>
