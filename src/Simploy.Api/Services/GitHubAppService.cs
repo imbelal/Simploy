@@ -16,11 +16,20 @@ namespace Simploy.Api.Services;
 /// </summary>
 public class GitHubAppService(IConfiguration cfg)
 {
-    // Env: GithubApp__AppId, GithubApp__ClientId, GithubApp__ClientSecret, GithubApp__PrivateKey, GithubApp__Slug
+    // Env: GithubApp__AppId, GithubApp__ClientId, GithubApp__ClientSecret, GithubApp__PrivateKey / PrivateKeyFile, GithubApp__Slug
     private string AppId => cfg["GithubApp:AppId"] ?? "";
     private string ClientId => cfg["GithubApp:ClientId"] ?? "";
-    private string PrivateKeyPem => cfg["GithubApp:PrivateKey"] ?? "";
     private string Slug => cfg["GithubApp:Slug"] ?? "";
+    private string PrivateKeyPem
+    {
+        get
+        {
+            // Prefer a file (robust for PEM, no newline/quoting issues in env).
+            var file = cfg["GithubApp:PrivateKeyFile"];
+            if (!string.IsNullOrEmpty(file) && File.Exists(file)) return File.ReadAllText(file);
+            return cfg["GithubApp:PrivateKey"] ?? "";
+        }
+    }
 
     public bool IsConfigured => !string.IsNullOrEmpty(AppId) && !string.IsNullOrEmpty(PrivateKeyPem);
     // Owner install URL: works for your own app regardless of the slug (public /apps/... slug URL

@@ -32,6 +32,9 @@ services:
       GithubApp__ClientSecret: "${SIMPLOY_GH_CLIENT_SECRET:-}"
       GithubApp__Slug: "${SIMPLOY_GH_SLUG:-}"
       GithubApp__PrivateKey: "${SIMPLOY_GH_PRIVATE_KEY:-}"
+      GithubApp__PrivateKeyFile: "${SIMPLOY_GH_PRIVATE_KEY_FILE:-}"
+    volumes:
+      - ./github-app.pem:/run/secrets/github-app.pem:ro
     depends_on:
       postgres:
         condition: service_healthy
