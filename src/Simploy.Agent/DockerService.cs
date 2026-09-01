@@ -325,12 +325,21 @@ public class DockerService(ILogger<DockerService> log)
         catch { /* start it */ }
 
         log.LogInformation("Starting shared proxy Caddy ({Name})", ProxyCaddy);
-        await RunAsync("docker",
-            $"run -d --name {ProxyCaddy} --restart unless-stopped --network {ProxyNetwork} " +
-            $"-p 80:80 -p 443:443 " +
-            $"-v {ProxyDir}/Caddyfile:/etc/caddy/Caddyfile " +
-            $"-v {ProxyAppsDir}:/etc/caddy/apps " +
-            $"caddy:latest", ct);
+        try
+        {
+            await RunAsync("docker",
+                $"run -d --name {ProxyCaddy} --restart unless-stopped --network {ProxyNetwork} " +
+                $"-p 80:80 -p 443:443 " +
+                $"-v {ProxyDir}/Caddyfile:/etc/caddy/Caddyfile " +
+                $"-v {ProxyAppsDir}:/etc/caddy/apps " +
+                $"caddy:latest", ct);
+        }
+        catch (Exception ex)
+        {
+            // Ports 80/443 may be held by an app that ships its own Caddy. The app still
+            // deploys; routing just needs the other proxy removed first.
+            log.LogWarning("Could not start shared proxy Caddy: {Ex}", ex.Message);
+        }
     }
 
     /// <summary>Writes this app's domain fragment into the shared proxy's config dir,
