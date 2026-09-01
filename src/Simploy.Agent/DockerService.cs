@@ -40,6 +40,11 @@ public class DockerService(ILogger<DockerService> log)
         var hostPort = req.Domains?.FirstOrDefault(d => !d.IsStatic && d.TargetPort.HasValue)?.TargetPort ?? 8080;
 
         // ---- 2. Make the image available.
+        // Write .env FIRST so it's in the build context: Vite reads VITE_* vars from
+        // .env at build time (and docker compose uses it as env_file at runtime).
+        var envContent = ComposeRenderer.RenderEnv(req.EnvVars);
+        await File.WriteAllTextAsync(Path.Combine(sourceDir, ".env"), envContent, ct);
+
         await MaybeLoginAsync(req, ct);
         var dockerfile = string.IsNullOrWhiteSpace(req.DockerfilePath) ? "Dockerfile" : req.DockerfilePath;
         var dockerfileFull = Path.Combine(sourceDir, dockerfile);
@@ -75,10 +80,7 @@ public class DockerService(ILogger<DockerService> log)
             await RunAsync("docker", $"pull {oldImage}", ct);
         }
 
-        // ---- 3. Render .env + docker-compose.yml (repo's own, or generated).
-        var envContent = ComposeRenderer.RenderEnv(req.EnvVars);
-        await File.WriteAllTextAsync(Path.Combine(sourceDir, ".env"), envContent, ct);
-
+        // ---- 3. Render docker-compose.yml (repo's own, or generated).
         var composeFile = FindComposeFile(sourceDir);
 
         string composeContent;
