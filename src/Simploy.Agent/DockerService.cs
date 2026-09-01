@@ -147,9 +147,9 @@ public class DockerService(ILogger<DockerService> log)
         // Reload the shared proxy so this app's domains go live.
         await ReloadSharedProxyAsync(ct);
 
-        // ---- 6. Health gate.
-        var healthTarget = oldImage is null ? $"{serviceName}:{hostPort}" : $"{serviceName}-new:{hostPort}";
-        var health = await WaitHealthyAsync(healthTarget, ct);
+        // ---- 6. Health gate (no host port published, so check the container's status).
+        var healthService = oldImage is null ? appService : $"{appService}-new";
+        var health = await WaitHealthyAsync(req.Slot, healthService, sourceDir, ct);
 
         var logFile = Path.Combine(sourceDir, "deploy.log");
         await File.WriteAllTextAsync(logFile, $"image={image}\nslot={req.Slot}\ncompose={(composeFile is null ? "generated" : composeFile)}\nhealth={health}\n", ct);
@@ -504,16 +504,21 @@ public class DockerService(ILogger<DockerService> log)
         }
     }
 
-    private async Task<string> WaitHealthyAsync(string target, CancellationToken ct)
+    /// <summary>Waits for the app container to be running (no host port is published, so
+    /// we check the container's Docker health / status instead of an HTTP endpoint).</summary>
+    private async Task<string> WaitHealthyAsync(string slot, string service, string workdir, CancellationToken ct)
     {
-        foreach (var _ in Enumerable.Range(0, 12))
+        for (var i = 0; i < 40; i++)
         {
-            await Task.Delay(5000, ct);
+            await Task.Delay(3000, ct);
             try
             {
-                using var http = new System.Net.Http.HttpClient { Timeout = TimeSpan.FromSeconds(5) };
-                var resp = await http.GetAsync($"http://localhost:{target.Split(':')[1]}/health", ct);
-                if (resp.IsSuccessStatusCode) return "healthy";
+                var cid = (await RunAsync("docker", $"compose -p {ComposeRenderer.Sanitize(slot)} ps -q {service}", workdir, ct)).Trim();
+                if (string.IsNullOrEmpty(cid)) continue; // not created/up yet
+
+                var status = (await RunAsync("docker", $"inspect {cid} --format {{{{.State.Status}}}}", ct)).Trim();
+                if (status == "running") return "healthy";
+                if (status is "exited" or "dead" or "restarting") return $"unhealthy({status})";
             }
             catch { }
         }

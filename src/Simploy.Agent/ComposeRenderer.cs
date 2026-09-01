@@ -41,7 +41,6 @@ public static class ComposeRenderer
         sb.AppendLine($"  {serviceName}:");
         sb.AppendLine($"    image: \"{req.ImageRepository}:{req.ImageTag}\"");
         sb.AppendLine("    env_file: .env");
-        sb.AppendLine($"    ports: [\"{hostPort}:{hostPort}\"]");
         sb.AppendLine("    restart: unless-stopped");
         sb.AppendLine("    deploy:");
         sb.AppendLine("      resources:");
@@ -70,7 +69,6 @@ public static class ComposeRenderer
         sb.AppendLine($"  {serviceName}-new:");
         sb.AppendLine($"    image: \"{image}\"");
         sb.AppendLine("    env_file: .env");
-        sb.AppendLine($"    ports: [\"{hostPort}:{hostPort}\"]");
         sb.AppendLine("    restart: unless-stopped");
         RegisterService(sb, $"{serviceName}-new", hostPort, "simploy-proxy");
         sb.AppendLine($"  {serviceName}-old:");
@@ -87,13 +85,10 @@ public static class ComposeRenderer
 
     private static void RegisterService(StringBuilder sb, string name, int hostPort, string network)
     {
+        // No host port is published (routing is via the shared proxy), and no in-container
+        // healthcheck is required (the agent gates on the container's Docker health/status).
         sb.AppendLine("    labels:");
         sb.AppendLine($"      simploy.project: \"{Sanitize(name)}\"");
-        sb.AppendLine($"    healthcheck:");
-        sb.AppendLine($"      test: [\"CMD-SHELL\", \"wget -qO- http://localhost:{hostPort}/health || exit 1\"]");
-        sb.AppendLine($"      interval: 10s");
-        sb.AppendLine($"      timeout: 5s");
-        sb.AppendLine($"      retries: 6");
         sb.AppendLine($"    networks:");
         sb.AppendLine($"      - {network}");
     }
