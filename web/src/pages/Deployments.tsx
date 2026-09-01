@@ -23,15 +23,20 @@ export default function Deployments() {
 
   const load = async () => {
     const p = await api.projects.list().catch(() => [])
-    setProjects(p); if (p[0] && !projectId) setProjectId(p[0].id)
+    setProjects(p)
+    // Only default to the first item once; never override a user selection.
+    setProjectId(prev => (prev ? prev : p[0]?.id ?? ''))
     const e = await api.envs.list().catch(() => [])
-    setEnvs(e); if (e[0] && !envId) setEnvId(e[0].id)
+    setEnvs(e)
+    setEnvId(prev => (prev ? prev : e[0]?.id ?? ''))
     const d = await api.deployments.list().catch(() => [])
     setDeps(d)
   }
   useEffect(() => { load(); const i = setInterval(load, 3000); return () => clearInterval(i) }, [])
 
   const filteredEnvs = projectId ? envs.filter((e: any) => e.projectId === projectId) : envs
+  const projectEnvIds = new Set(filteredEnvs.map((e: any) => e.id))
+  const visibleDeps = projectId ? deps.filter((d: any) => projectEnvIds.has(d.environmentId)) : deps
 
   const deploy = async (strategy: string) => {
     if (!envId) return setMsg('Pick an environment first')
@@ -79,11 +84,11 @@ export default function Deployments() {
         <div className="mt-3 text-xs text-slate-500 leading-relaxed">With an Agent on :8089 this <span className="text-slate-700 font-medium">clones your Git repo, builds the image, and runs <code className="bg-slate-100 px-1.5 rounded font-mono text-[11px]">docker compose up -d</code></span>. Without one the deploy ends <span className="text-red-600">Failed</span> — expected for the local demo.</div>
       </Panel>
 
-      <Card title={`Recent deployments (${deps.length})`}>
+      <Card title={`Recent deployments (${visibleDeps.length})`}>
         <table className="w-full text-sm">
           <thead className="bg-slate-50 text-slate-500"><tr><th className="text-left px-5 py-3 font-medium">When</th><th className="text-left px-4 py-3 font-medium">Environment</th><th className="text-left px-4 py-3 font-medium">Tag</th><th className="text-left px-4 py-3 font-medium">Status</th><th className="text-left px-4 py-3 font-medium">Reach app</th><th className="text-left px-4 py-3 font-medium">Error / Log</th></tr></thead>
           <tbody>
-            {deps.map(d => {
+            {visibleDeps.map(d => {
               const label = typeof d.status === 'number' ? ['Queued', 'Building', 'Deploying', 'Healthy', 'Failed', 'RolledBack'][d.status] : d.status
               const info = statusInfo[label] || { label, tone: 'slate' as const }
               const healthy = label === 'Healthy'
@@ -104,7 +109,7 @@ export default function Deployments() {
                 </tr>
               )
             })}
-            {deps.length === 0 && <tr><td colSpan={6}><EmptyState title="No deployments yet">Trigger one above.</EmptyState></td></tr>}
+            {visibleDeps.length === 0 && <tr><td colSpan={6}><EmptyState title="No deployments yet">Trigger one above.</EmptyState></td></tr>}
           </tbody>
         </table>
       </Card>
