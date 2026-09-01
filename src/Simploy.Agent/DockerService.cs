@@ -226,6 +226,87 @@ public class DockerService(IConfiguration config, ILogger<DockerService> log)
         return changed ? new Exception(msg, ex.InnerException) : ex;
     }
 
+    // ===== Managed databases =====
+    public async Task<string> ProvisionDatabaseAsync(AgentDbRequest req, CancellationToken ct)
+    {
+        var dbName = ComposeRenderer.Sanitize(req.DbName);
+        var dir = Path.Combine(BaseDir, ".databases", dbName);
+        Directory.CreateDirectory(dir);
+
+        var (image, volumePath, healthcheck) = DbSpec(req);
+        var envVars = DbEnv(req, out var dataVolume);
+        await File.WriteAllTextAsync(Path.Combine(dir, ".env"), ComposeRenderer.RenderEnv(envVars), ct);
+
+        var compose = new StringBuilder();
+        compose.AppendLine("services:");
+        compose.AppendLine($"  {dbName}:");
+        compose.AppendLine($"    image: \"{image}\"");
+        if (req.Type.Equals("redis", StringComparison.OrdinalIgnoreCase))
+            compose.AppendLine("    command: [\"sh\",\"-c\",\"exec redis-server --requirepass \\\"$REDIS_PASSWORD\\\"\"]");
+        compose.AppendLine("    env_file: .env");
+        compose.AppendLine("    restart: unless-stopped");
+        compose.AppendLine("    volumes:");
+        compose.AppendLine($"      - {dataVolume}:{volumePath}");
+        compose.AppendLine("    healthcheck:");
+        compose.AppendLine($"      test: [\"CMD-SHELL\", \"{healthcheck}\"]");
+        compose.AppendLine("      interval: 5s");
+        compose.AppendLine("      timeout: 5s");
+        compose.AppendLine("      retries: 20");
+        compose.AppendLine("    networks:");
+        compose.AppendLine("      - simploy-proxy");
+        compose.AppendLine("volumes:");
+        compose.AppendLine($"  {dataVolume}:");
+        compose.AppendLine("networks:");
+        compose.AppendLine("  simploy-proxy:");
+        compose.AppendLine("    external: true");
+        await File.WriteAllTextAsync(Path.Combine(dir, "docker-compose.yml"), compose.ToString(), ct);
+
+        await EnsureSharedProxyAsync(ct);
+        await RunAsync("docker", $"compose -p db-{dbName} --env-file .env up -d", dir, ct);
+        var health = await WaitHealthyAsync($"db-{dbName}", dbName, dir, ct);
+        return $"provisioned db-{dbName} health={health}";
+    }
+
+    public async Task<string> RemoveDatabaseAsync(AgentDbRequest req, CancellationToken ct)
+    {
+        var dbName = ComposeRenderer.Sanitize(req.DbName);
+        var dir = Path.Combine(BaseDir, ".databases", dbName);
+        await RunAsync("docker", $"compose -p db-{dbName} down -v", dir, ct);
+        return $"removed db-{dbName}";
+    }
+
+    private static (string image, string volumePath, string healthcheck) DbSpec(AgentDbRequest req) => (req.Type.ToLowerInvariant(), req.Version) switch
+    {
+        ("mysql", var v) => ($"mysql:{v}", "/var/lib/mysql", "mysqladmin ping -h localhost -u root -p\"$MYSQL_ROOT_PASSWORD\" || exit 1"),
+        ("redis", var v) => ($"redis:{v}-alpine", "/data", "redis-cli -a \"$REDIS_PASSWORD\" ping | grep PONG"),
+        ("mongodb", var v) => ($"mongo:{v}", "/data/db", "mongosh --quiet --eval \"db.runCommand('ping').ok\" --username $MONGO_INITDB_ROOT_USERNAME --password $MONGO_INITDB_ROOT_PASSWORD admin | grep 1"),
+        _ => ($"postgres:{req.Version}-alpine", "/var/lib/postgresql/data", "pg_isready -U \"$POSTGRES_USER\" -d \"$POSTGRES_DB\""),
+    };
+
+    private static Dictionary<string, string> DbEnv(AgentDbRequest req, out string dataVolume)
+    {
+        dataVolume = $"{ComposeRenderer.Sanitize(req.DbName)}-data";
+        return req.Type.ToLowerInvariant() switch
+        {
+            "mysql" => new() {
+                ["MYSQL_DATABASE"] = req.DatabaseName,
+                ["MYSQL_USER"] = req.Username,
+                ["MYSQL_PASSWORD"] = req.Password,
+                ["MYSQL_ROOT_PASSWORD"] = req.Password,
+            },
+            "redis" => new() { ["REDIS_PASSWORD"] = req.Password },
+            "mongodb" => new() {
+                ["MONGO_INITDB_ROOT_USERNAME"] = req.Username,
+                ["MONGO_INITDB_ROOT_PASSWORD"] = req.Password,
+            },
+            _ => new() {
+                ["POSTGRES_DB"] = req.DatabaseName,
+                ["POSTGRES_USER"] = req.Username,
+                ["POSTGRES_PASSWORD"] = req.Password,
+            },
+        };
+    }
+
     /// <summary>Returns true if the given path is tracked by the repo's git (i.e. ships with
     /// the app). Untracked files are Simploy-generated leftovers.</summary>
     private async Task<bool> IsGitTrackedAsync(string sourceDir, string relativePath, CancellationToken ct)

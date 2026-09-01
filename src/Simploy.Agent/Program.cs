@@ -46,4 +46,19 @@ app.MapPost("/deploy", async (AgentDeployRequest req, DockerService docker, ILog
 
 app.MapGet("/containers", async (DockerService docker) => Results.Ok(await docker.ListContainersAsync()));
 
+// Managed database provisioning
+app.MapPost("/db/deploy", async (AgentDbRequest req, DockerService docker, ILogger<Program> log, CancellationToken ct) =>
+{
+    log.LogInformation("Provision database {Name} ({Type}:{Version})", req.DbName, req.Type, req.Version);
+    try { return Results.Ok(new { ok = true, output = await docker.ProvisionDatabaseAsync(req, ct) }); }
+    catch (Exception ex) { log.LogError(ex, "db deploy failed"); return Results.Problem(ex.Message); }
+});
+
+app.MapPost("/db/remove", async (AgentDbRequest req, DockerService docker, ILogger<Program> log, CancellationToken ct) =>
+{
+    log.LogInformation("Remove database {Name}", req.DbName);
+    try { return Results.Ok(new { ok = true, output = await docker.RemoveDatabaseAsync(req, ct) }); }
+    catch (Exception ex) { log.LogError(ex, "db remove failed"); return Results.Problem(ex.Message); }
+});
+
 app.Run();

@@ -7,6 +7,7 @@ public class SimployDbContext(DbContextOptions<SimployDbContext> options) : DbCo
 {
     public DbSet<Server> Servers => Set<Server>();
     public DbSet<Project> Projects => Set<Project>();
+    public DbSet<Database> Databases => Set<Database>();
     public DbSet<Simploy.Shared.Models.Environment> Environments => Set<Simploy.Shared.Models.Environment>();
     public DbSet<Domain> Domains => Set<Domain>();
     public DbSet<Deployment> Deployments => Set<Deployment>();
@@ -14,6 +15,8 @@ public class SimployDbContext(DbContextOptions<SimployDbContext> options) : DbCo
     protected override void OnModelCreating(ModelBuilder b)
     {
         b.Entity<Server>().HasIndex(x => x.Host).IsUnique();
+        b.Entity<Database>().HasIndex(x => new { x.ServerId, x.Name }).IsUnique();
+        b.Entity<Database>().HasOne(d => d.Server).WithMany().HasForeignKey(d => d.ServerId).OnDelete(DeleteBehavior.Cascade);
         b.Entity<Project>().HasIndex(x => x.Slug).IsUnique();
         b.Entity<Simploy.Shared.Models.Environment>().HasIndex(x => new { x.ProjectId, x.Name }).IsUnique();
         b.Entity<Domain>().HasIndex(x => x.Host).IsUnique();

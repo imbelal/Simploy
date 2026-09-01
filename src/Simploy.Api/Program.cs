@@ -28,7 +28,9 @@ else
 
 builder.Services.AddSingleton<DeploymentService>();
 builder.Services.AddSingleton<GitHubAppService>();
+builder.Services.AddSingleton<DatabaseService>();
 builder.Services.AddHostedService<DeploymentWorker>();
+builder.Services.AddHostedService<DatabaseWorker>();
 
 // ---- JWT auth (single admin user from config) ----
 var jwtSecret = builder.Configuration["Auth:JwtSecret"] ?? "simploy-dev-secret-change-me";
@@ -59,7 +61,28 @@ using (var scope = app.Services.CreateScope())
     // EnsureCreated does not alter an existing database, so apply lightweight
     // additive schema changes here (idempotent, Postgres only).
     if (db.Database.IsRelational())
+    {
         db.Database.ExecuteSqlRaw("ALTER TABLE \"Domains\" ADD COLUMN IF NOT EXISTS \"EnableHttps\" boolean NOT NULL DEFAULT false; ALTER TABLE \"Projects\" ADD COLUMN IF NOT EXISTS \"GithubInstallationId\" text NULL;");
+        // Databases table (added after EnsureCreated for an existing DB).
+        db.Database.ExecuteSqlRaw("""
+            CREATE TABLE IF NOT EXISTS "Databases" (
+                "Id" uuid NOT NULL PRIMARY KEY,
+                "Name" text NOT NULL,
+                "Type" text NOT NULL,
+                "Version" text NOT NULL,
+                "ServerId" uuid NULL,
+                "Slot" text NOT NULL,
+                "Username" text NOT NULL,
+                "Password" text NOT NULL,
+                "DatabaseName" text NOT NULL,
+                "Port" integer NOT NULL,
+                "Status" text NOT NULL,
+                "CreatedAt" timestamptz NOT NULL,
+                CONSTRAINT "FK_Databases_Servers_ServerId" FOREIGN KEY ("ServerId") REFERENCES "Servers"("Id") ON DELETE CASCADE
+            );
+            CREATE UNIQUE INDEX IF NOT EXISTS "IX_Databases_ServerId_Name" ON "Databases"("ServerId", "Name");
+            """);
+    }
     // Only seed demo data in Development (local `dotnet run`). Production/VM
     // deployments start empty: you add your real servers & projects in the UI.
     if (app.Environment.IsDevelopment())

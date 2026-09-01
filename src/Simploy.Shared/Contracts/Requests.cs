@@ -8,6 +8,9 @@ public record SetDomainsRequest(List<DomainRouteRequest> Domains);
 public record CreateDeploymentRequest(Guid EnvironmentId, string ImageTag, string Strategy, string? CommitSha, int CanaryPercent = 50);
 public record LoginRequest(string Username, string Password);
 
+/// <summary>Provisions a managed database container on the agent.</summary>
+public record AgentDbRequest(string DbName, string Type, string Version, string Username, string Password, string DatabaseName, int Port, string Slot);
+
 /// <summary>
 /// A domain mapped to an environment. Sent to the agent so it can render the
 /// Caddyfile (including weighted canary split between old/new services).

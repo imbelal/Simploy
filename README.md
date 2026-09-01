@@ -94,4 +94,16 @@ On deploy, Simploy mints a short-lived installation token and clones with it. No
 leave the project's Git token blank. (We recommend moving the private key to an encrypted
 secret store — see Next.)
 
+## Managed databases
+Create databases from the **Databases** tab: Postgres / MySQL / Redis / MongoDB. Simploy
+provisions each as a container on your server with a persistent volume, on the `simploy-proxy`
+network, and auto-generates a password. Apps on the same proxy network connect by host name:
+
+```
+Host=db-<name>  Port=<port>  Database=<name>  User=<user>  Password=<generated>
+```
+
+You can still ship your own DB in an app's `docker-compose.yml` too (Option A) — both coexist.
+Set the password via the app's env vars if you want to override the generated one.
+
 **Next:** SOPS for secrets, real compose templating for multi-service apps, GH webhook auto-deploy.
