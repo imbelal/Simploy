@@ -18,8 +18,13 @@ AGENT_PORT="${AGENT_PORT:-8089}"
 INSTALL_DIR="${INSTALL_DIR:-/opt/simploy}"
 WORK="${WORK:-/tmp/simploy-install}"
 AGENT_CONTAINER="simploy-agent"
-# Must match the api service's Agent__Token in docker-compose.yml.
-AGENT_TOKEN="${AGENT_TOKEN:-${SIMPLOY_AGENT_TOKEN:-simploy-agent-token-change-me}}"
+# Must match the api service's Agent__Token in docker-compose.yml. If not given
+# explicitly, read it from the repo's .env (single source of truth).
+AGENT_TOKEN="${AGENT_TOKEN:-}"
+if [ -z "$AGENT_TOKEN" ] && [ -f "${INSTALL_DIR}/.env" ]; then
+  AGENT_TOKEN="$(grep -E '^SIMPLOY_AGENT_TOKEN=' "${INSTALL_DIR}/.env" 2>/dev/null | tail -1 | cut -d= -f2- | tr -d '"' || true)"
+fi
+AGENT_TOKEN="${AGENT_TOKEN:-simploy-agent-token-change-me}"
 
 info(){ printf '\033[0;36m[simploy]\033[0m %s\n' "$*"; }
 die(){ printf '\033[0;31m[simploy]\033[0m ERROR: %s\n' "$*" >&2; exit 1; }
