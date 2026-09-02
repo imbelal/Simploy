@@ -271,8 +271,8 @@ export default function Projects() {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-sm p-4">
           <div className="bg-white rounded-2xl shadow-deep w-full max-w-md p-5">
             <div className="font-semibold text-slate-900 mb-1">Domains — {domEdit.name}</div>
-            <div className="text-xs text-slate-500 mb-3">One per line as <code className="bg-slate-100 px-1 rounded font-mono">domain.tld</code>, <code className="bg-slate-100 px-1 rounded font-mono">domain.tld service:port</code> (e.g. <code className="bg-slate-100 px-1 rounded font-mono">seq.example.com seq:80</code>). Prefix with <code className="bg-slate-100 px-1 rounded font-mono">https://</code> to enable Caddy automatic HTTPS (needs DNS + ports 80/443).</div>
-            <textarea value={domText} onChange={e => setDomText(e.target.value)} rows={6} className={inputCls + ' font-mono text-xs'} placeholder={'https://api.example.com 8080\nseq.example.com seq:80'} />
+            <div className="text-xs text-slate-500 mb-3">One per line: <code className="bg-slate-100 px-1 rounded font-mono">domain.tld</code>, or <code className="bg-slate-100 px-1 rounded font-mono">domain.tld service</code> (port auto-detected), or <code className="bg-slate-100 px-1 rounded font-mono">domain.tld service:port</code> to pin. Prefix <code className="bg-slate-100 px-1 rounded font-mono">https://</code> for TLS. Example: <code className="bg-slate-100 px-1 rounded font-mono">staging-seq.imbelal.com seq</code>.</div>
+            <textarea value={domText} onChange={e => setDomText(e.target.value)} rows={6} className={inputCls + ' font-mono text-xs'} placeholder={'api.example.com\nseq.example.com seq\nadminer.example.com adminer:8080'} />
             <div className="flex justify-end gap-3 mt-4">
               <Button variant="secondary" onClick={() => setDomEdit(null)}>Cancel</Button>
               <Button variant="primary" onClick={saveDomains}>Save</Button>

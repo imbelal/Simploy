@@ -119,7 +119,7 @@ public class DockerService(IConfiguration config, ILogger<DockerService> log)
         // register this app's domains as a fragment (picked up via Caddy 'import').
         await EnsureSharedProxyAsync(ct);
         if (composeFile is null || composeContent.Contains("simploy-proxy", StringComparison.Ordinal))
-            await WriteProxyFragmentAsync(req, appService, hostPort, ct);
+            await WriteProxyFragmentAsync(req, appService, hostPort, composeContent, ct);
 
         // SQL Server 2022 runs as non-root and can't write its host bind-mount data
         // dir (Access is denied). Run mssql services as root via a Simploy compose
@@ -525,8 +525,9 @@ public class DockerService(IConfiguration config, ILogger<DockerService> log)
     }
 
     /// <summary>Writes this app's domain fragment into the shared proxy's config dir,
-    /// so the proxy can route to this app by name across the shared network.</summary>
-    private async Task WriteProxyFragmentAsync(AgentDeployRequest req, string appService, int port, CancellationToken ct)
+    /// so the proxy can route to this app by name across the shared network. Ports are
+    /// auto-detected from the compose (service name -> internal port) when not pinned.</summary>
+    private async Task WriteProxyFragmentAsync(AgentDeployRequest req, string appService, int port, string composeContent, CancellationToken ct)
     {
         if (req.Domains is null || req.Domains.Count == 0) return;
         Directory.CreateDirectory(ProxyAppsDir);
@@ -535,7 +536,21 @@ public class DockerService(IConfiguration config, ILogger<DockerService> log)
         {
             if (d.IsStatic || string.IsNullOrWhiteSpace(d.Host)) continue;
             sb.AppendLine(d.EnableHttps ? $"{d.Host} {{" : $"http://{d.Host} {{");
-            var target = d.TargetService ?? $"{appService}:{port}";
+
+            string target;
+            if (!string.IsNullOrWhiteSpace(d.TargetService))
+            {
+                // "seq" -> auto port, or "seq:80" -> pinned.
+                var parts = d.TargetService.Split(':');
+                var svc = parts[0].Trim();
+                var p = parts.Length > 1 ? parts[1].Trim() : (GetServiceInternalPort(composeContent, svc) ?? 8080).ToString();
+                target = $"{svc}:{p}";
+            }
+            else
+            {
+                var p = d.TargetPort ?? GetServiceInternalPort(composeContent, appService) ?? 8080;
+                target = $"{appService}:{p}";
+            }
             sb.AppendLine($"    reverse_proxy {target}");
             sb.AppendLine("}");
             sb.AppendLine();
@@ -543,6 +558,39 @@ public class DockerService(IConfiguration config, ILogger<DockerService> log)
         var file = Path.Combine(ProxyAppsDir, $"{ComposeRenderer.Sanitize(req.ProjectSlug)}-{ComposeRenderer.Sanitize(req.Slot)}.conf");
         await File.WriteAllTextAsync(file, sb.ToString(), ct);
         log.LogInformation("Wrote proxy fragment {File}", file);
+    }
+
+    /// <summary>Best-effort parse of a service's internal (container) port from the compose.
+    /// Uses the right-hand side of the first "ports:" mapping, e.g. "127.0.0.1:5341:80" -> 80.</summary>
+    private static int? GetServiceInternalPort(string? composeContent, string serviceName)
+    {
+        if (string.IsNullOrWhiteSpace(composeContent)) return null;
+        var lines = composeContent.Split('\n');
+        var inService = false;
+        var inPorts = false;
+        foreach (var raw in lines)
+        {
+            var line = raw.TrimEnd();
+            if (string.IsNullOrWhiteSpace(line)) continue;
+            var indent = line.Length - line.TrimStart().Length;
+            var t = line.Trim();
+
+            if (!inService)
+            {
+                if (indent == 2 && t.StartsWith($"{serviceName}:")) inService = true;
+                continue;
+            }
+            if (indent < 2) break; // left the service
+
+            if (indent == 4 && t.StartsWith("ports:")) { inPorts = true; continue; }
+            if (inPorts && indent == 6 && t.StartsWith("-"))
+            {
+                var vals = t.TrimStart('-').Trim().Split(':').Select(x => x.Trim()).Where(x => x.Length > 0).ToArray();
+                if (vals.Length >= 1 && int.TryParse(vals[^1], out var p)) return p;
+            }
+            if (indent < 4) inPorts = false;
+        }
+        return null;
     }
 
     // Restart reloads Caddy so newly written import fragments (domains) are always picked up
