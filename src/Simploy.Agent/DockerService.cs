@@ -240,6 +240,7 @@ public class DockerService(IConfiguration config, ILogger<DockerService> log)
         var compose = new StringBuilder();
         compose.AppendLine("services:");
         compose.AppendLine($"  {dbName}:");
+        compose.AppendLine($"    container_name: db-{dbName}");
         compose.AppendLine($"    image: \"{image}\"");
         if (req.Type.Equals("redis", StringComparison.OrdinalIgnoreCase))
             compose.AppendLine("    command: [\"sh\",\"-c\",\"exec redis-server --requirepass \\\"$REDIS_PASSWORD\\\"\"]");
