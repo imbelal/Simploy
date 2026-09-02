@@ -32,14 +32,31 @@ public class DatabaseService(IServiceProvider sp, IConfiguration config, ILogger
                 http.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
             var path = job.Remove ? "/db/remove" : "/db/deploy";
             var resp = await http.PostAsJsonAsync($"{agentUrl}{path}", payload, ct);
-            item.Status = resp.IsSuccessStatusCode ? (job.Remove ? "Removed" : "Running") : "Failed";
+            if (!resp.IsSuccessStatusCode)
+            {
+                item.Status = "Failed";
+                await db.SaveChangesAsync(ct);
+                return;
+            }
+
+            if (job.Remove)
+            {
+                // Container + data volume removed; drop the row so it disappears from the UI.
+                db.Databases.Remove(item);
+                await db.SaveChangesAsync(ct);
+            }
+            else
+            {
+                item.Status = "Running";
+                await db.SaveChangesAsync(ct);
+            }
         }
         catch (Exception ex)
         {
             log.LogError(ex, "Database job for {Name} failed", item.Name);
             item.Status = "Failed";
+            await db.SaveChangesAsync(ct);
         }
-        await db.SaveChangesAsync(ct);
     }
 }
 

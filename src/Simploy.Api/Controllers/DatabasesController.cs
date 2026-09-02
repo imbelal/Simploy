@@ -60,11 +60,8 @@ public class DatabasesController(SimployDbContext db, DatabaseService dbService)
     {
         var d = await db.Databases.FindAsync(id);
         if (d is null) return NotFound();
-        _ = dbService.EnqueueRemoveAsync(id);   // remove the container first
-        // mark removed; keep the row so the UI shows history (optional). We delete after provision.
-        await Task.Delay(1);
-        d.Status = "Removing";
-        await db.SaveChangesAsync();
+        // Removes the container + data volume via the agent; the row is deleted on success.
+        _ = dbService.EnqueueRemoveAsync(id);
         return NoContent();
     }
 
