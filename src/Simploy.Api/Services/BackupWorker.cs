@@ -14,7 +14,7 @@ public class BackupService(IConfiguration config)
 
     public async Task<string> RunAsync(BackupSettings s, CancellationToken ct)
     {
-        var conn = Parse(Environment.GetEnvironmentVariable("ConnectionStrings__Default") ?? config.GetConnectionString("Default"));
+        var conn = Parse(System.Environment.GetEnvironmentVariable("ConnectionStrings__Default") ?? config.GetConnectionString("Default"));
         using var http = new HttpClient { Timeout = TimeSpan.FromMinutes(10) };
         var token = config["Agent:Token"] ?? "";
         if (!string.IsNullOrEmpty(token))
