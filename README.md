@@ -106,4 +106,11 @@ Host=db-<name>  Port=<port>  Database=<name>  User=<user>  Password=<generated>
 You can still ship your own DB in an app's `docker-compose.yml` too (Option A) — both coexist.
 Set the password via the app's env vars if you want to override the generated one.
 
+## Backups
+Back up Simploy's own control-plane database from the **Backups** tab: enable scheduled backups
+(interval + retention), or click "Back up now". The agent `pg_dump`s the control-plane Postgres
+into `/opt/simploy/backups/`, pruned by retention. Files live on the VM (keep them off the box or
+sync elsewhere for true redundancy). **Never run `docker compose down -v`** — that removes the
+`pgdata` volume. Always back up before unsafe operations.
+
 **Next:** SOPS for secrets, real compose templating for multi-service apps, GH webhook auto-deploy.

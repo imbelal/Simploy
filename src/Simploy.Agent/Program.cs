@@ -61,4 +61,23 @@ app.MapPost("/db/remove", async (AgentDbRequest req, DockerService docker, ILogg
     catch (Exception ex) { log.LogError(ex, "db remove failed"); return Results.Problem(ex.Message); }
 });
 
+// Simploy control-plane backup (dump the Postgres database via docker exec)
+app.MapPost("/system/backup", async (AgentBackupRequest req, DockerService docker, ILogger<Program> log, CancellationToken ct) =>
+{
+    try { return Results.Ok(new { ok = true, output = await docker.RunBackupAsync(req, ct) }); }
+    catch (Exception ex) { log.LogError(ex, "backup failed"); return Results.Problem(ex.Message); }
+});
+
+app.MapGet("/system/backup/list", async (string dir, DockerService docker, ILogger<Program> log, CancellationToken ct) =>
+{
+    try { return Results.Ok(docker.ListBackups(dir)); }
+    catch (Exception ex) { return Results.Problem(ex.Message); }
+});
+
+app.MapPost("/system/backup/restore", async (AgentBackupRequest req, DockerService docker, ILogger<Program> log, CancellationToken ct) =>
+{
+    try { return Results.Ok(new { ok = true, output = await docker.RestoreBackupAsync(req, ct) }); }
+    catch (Exception ex) { log.LogError(ex, "restore failed"); return Results.Problem(ex.Message); }
+});
+
 app.Run();

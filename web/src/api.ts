@@ -63,4 +63,10 @@ export const api = {
     create: (b: any) => req<any>('/api/databases', { method: 'POST', body: JSON.stringify(b) }),
     del: (id: string) => req<any>(`/api/databases/${id}`, { method: 'DELETE' }),
   },
+  backups: {
+    get: () => req<any>('/api/settings/backups'),
+    set: (b: any) => req<any>('/api/settings/backups', { method: 'PUT', body: JSON.stringify(b) }),
+    run: () => req<any>('/api/settings/backups/run', { method: 'POST' }),
+    list: () => req<any[]>('/api/settings/backups/list'),
+  },
 };

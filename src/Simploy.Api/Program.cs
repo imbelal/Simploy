@@ -31,6 +31,7 @@ builder.Services.AddSingleton<GitHubAppService>();
 builder.Services.AddSingleton<DatabaseService>();
 builder.Services.AddHostedService<DeploymentWorker>();
 builder.Services.AddHostedService<DatabaseWorker>();
+builder.Services.AddHostedService<BackupWorker>();
 
 // ---- JWT auth (single admin user from config) ----
 var jwtSecret = builder.Configuration["Auth:JwtSecret"] ?? "simploy-dev-secret-change-me";
@@ -81,6 +82,18 @@ using (var scope = app.Services.CreateScope())
                 CONSTRAINT "FK_Databases_Servers_ServerId" FOREIGN KEY ("ServerId") REFERENCES "Servers"("Id") ON DELETE CASCADE
             );
             CREATE UNIQUE INDEX IF NOT EXISTS "IX_Databases_ServerId_Name" ON "Databases"("ServerId", "Name");
+            """);
+        db.Database.ExecuteSqlRaw("""
+            CREATE TABLE IF NOT EXISTS "BackupSettings" (
+                "Id" uuid NOT NULL PRIMARY KEY,
+                "Enabled" boolean NOT NULL,
+                "IntervalMinutes" integer NOT NULL,
+                "Retention" integer NOT NULL,
+                "DestDir" text NOT NULL,
+                "DbContainer" text NOT NULL,
+                "LastBackupAt" timestamptz NULL,
+                "UpdatedAt" timestamptz NOT NULL
+            );
             """);
     }
     // Only seed demo data in Development (local `dotnet run`). Production/VM

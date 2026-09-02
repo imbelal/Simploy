@@ -8,6 +8,7 @@ public class SimployDbContext(DbContextOptions<SimployDbContext> options) : DbCo
     public DbSet<Server> Servers => Set<Server>();
     public DbSet<Project> Projects => Set<Project>();
     public DbSet<Database> Databases => Set<Database>();
+    public DbSet<BackupSettings> BackupSettings => Set<BackupSettings>();
     public DbSet<Simploy.Shared.Models.Environment> Environments => Set<Simploy.Shared.Models.Environment>();
     public DbSet<Domain> Domains => Set<Domain>();
     public DbSet<Deployment> Deployments => Set<Deployment>();

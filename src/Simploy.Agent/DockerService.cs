@@ -309,6 +309,56 @@ public class DockerService(IConfiguration config, ILogger<DockerService> log)
         };
     }
 
+    // ===== Control-plane backup (pg_dump via docker exec) =====
+    public async Task<string> RunBackupAsync(AgentBackupRequest req, CancellationToken ct)
+    {
+        Directory.CreateDirectory(req.DestDir);
+        var file = Path.Combine(req.DestDir, $"simploy_{DateTime.UtcNow:yyyyMMdd_HHmmss}.sql");
+        var output = await RunStdoutOnlyAsync("docker",
+            $"exec -e PGPASSWORD={req.Password} {req.Container} pg_dump -U {req.Username} -d {req.DatabaseName}", ct);
+        await File.WriteAllTextAsync(file, output, ct);
+        PruneBackups(req.DestDir, req.Retention);
+        return $"backup={file} bytes={new FileInfo(file).Length}";
+    }
+
+    public async Task<string> RestoreBackupAsync(AgentBackupRequest req, CancellationToken ct)
+    {
+        var file = req.DestDir; // DestDir carries the file path here
+        var sql = await File.ReadAllTextAsync(file, ct);
+        await RunAsync("docker",
+            $"exec -i {req.Container} psql -U {req.Username} -d {req.DatabaseName}", ct: ct, stdin: sql);
+        return $"restored from {file}";
+    }
+
+    public List<object> ListBackups(string dir)
+    {
+        if (!Directory.Exists(dir)) return new();
+        return new DirectoryInfo(dir).GetFiles("*.sql")
+            .OrderByDescending(f => f.LastWriteTime)
+            .Select(f => (object)new { file = f.FullName, name = f.Name, size = f.Length, created = f.LastWriteTime })
+            .ToList();
+    }
+
+    private static void PruneBackups(string dir, int keep)
+    {
+        if (keep <= 0) return;
+        foreach (var f in new DirectoryInfo(dir).GetFiles("*.sql").OrderByDescending(f => f.LastWriteTime).Skip(keep))
+            f.Delete();
+    }
+
+    /// <summary>Runs a command capturing only stdout (clean output, e.g. pg_dump SQL).</summary>
+    private async Task<string> RunStdoutOnlyAsync(string file, string args, CancellationToken ct = default, IDictionary<string, string>? env = null)
+    {
+        var psi = new ProcessStartInfo(file, args) { RedirectStandardOutput = true, RedirectStandardError = true, UseShellExecute = false };
+        if (env is not null) foreach (var (k, v) in env) psi.Environment[k] = v;
+        using var p = Process.Start(psi)!;
+        var stdout = await p.StandardOutput.ReadToEndAsync(ct);
+        var stderr = await p.StandardError.ReadToEndAsync(ct);
+        await p.WaitForExitAsync(ct);
+        if (p.ExitCode != 0) throw new Exception($"{file} {args} failed ({p.ExitCode}): {stderr}");
+        return stdout;
+    }
+
     /// <summary>Returns true if the given path is tracked by the repo's git (i.e. ships with
     /// the app). Untracked files are Simploy-generated leftovers.</summary>
     private async Task<bool> IsGitTrackedAsync(string sourceDir, string relativePath, CancellationToken ct)

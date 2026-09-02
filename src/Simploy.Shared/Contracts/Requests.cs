@@ -11,6 +11,9 @@ public record LoginRequest(string Username, string Password);
 /// <summary>Provisions a managed database container on the agent.</summary>
 public record AgentDbRequest(string DbName, string Type, string Version, string Username, string Password, string DatabaseName, int Port, string Slot);
 
+/// <summary>Backs up Simploy's control-plane Postgres via the agent (docker exec pg_dump).</summary>
+public record AgentBackupRequest(string Container, string DatabaseName, string Username, string Password, string DestDir, int Retention);
+
 /// <summary>
 /// A domain mapped to an environment. Sent to the agent so it can render the
 /// Caddyfile (including weighted canary split between old/new services).

@@ -6,6 +6,7 @@ import Servers from './pages/Servers'
 import Projects from './pages/Projects'
 import Deployments from './pages/Deployments'
 import Databases from './pages/Databases'
+import Backups from './pages/Backups'
 import VmGuide from './pages/VmGuide'
 import Login from './pages/Login'
 
@@ -15,6 +16,7 @@ const nav = [
   { to: '/projects', label: 'Projects', icon: '📦' },
   { to: '/databases', label: 'Databases', icon: '🗄️' },
   { to: '/deployments', label: 'Deployments', icon: '🚀' },
+  { to: '/backups', label: 'Backups', icon: '💾' },
   { to: '/vm-guide', label: 'VM Guide', icon: '📖' },
 ]
 
@@ -99,6 +101,7 @@ export default function App() {
                   <Route path="/servers" element={<Servers />} />
                   <Route path="/projects" element={<Projects />} />
                   <Route path="/databases" element={<Databases />} />
+                  <Route path="/backups" element={<Backups />} />
                   <Route path="/deployments" element={<Deployments />} />
                   <Route path="/vm-guide" element={<VmGuide />} />
                   <Route path="/login" element={<Navigate replace to="/" />} />
