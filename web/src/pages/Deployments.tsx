@@ -16,12 +16,14 @@ export default function Deployments() {
   const [projects, setProjects] = useState<any[]>([])
   const [envs, setEnvs] = useState<any[]>([])
   const [deps, setDeps] = useState<any[]>([])
-  const [imageTag, setImageTag] = useState('prod-' + Math.random().toString(36).slice(2, 7))
+  const [imageTag, setImageTag] = useState('')
   const [projectId, setProjectId] = useState('')
   const [envId, setEnvId] = useState('')
   const [msg, setMsg] = useState('')
   const projectRef = useRef('')
   const envRef = useRef('')
+
+  const randomTag = (prefix: string) => `${prefix}-${Math.random().toString(36).slice(2, 7)}`
 
   // Load the environments of a project and keep the previous env if still valid,
   // otherwise auto-select the first one.
@@ -30,6 +32,8 @@ export default function Deployments() {
     const id = keep ? envRef.current : list[0]?.id ?? ''
     envRef.current = id
     setEnvId(id)
+    const env = list.find((e: any) => e.id === id)
+    if (env) setImageTag(randomTag(env.slot || env.name))   // tag prefix from the env slot
   }
   const loadEnvs = async (pid: string) => {
     const e = await api.envs.list(pid || undefined).catch(() => [])
@@ -83,7 +87,7 @@ export default function Deployments() {
               </select>
             </Field>
             <Field label="Environment" hint="Which server + slot to deploy to.">
-              <select value={envId} onChange={e => { envRef.current = e.target.value; setEnvId(e.target.value) }} className={inputCls}>
+              <select value={envId} onChange={e => { const id = e.target.value; envRef.current = id; setEnvId(id); const env = envs.find(x => x.id === id); if (env) setImageTag(randomTag(env.slot || env.name)); }} className={inputCls}>
                 {envs.map(e => <option key={e.id} value={e.id}>{e.name} ({e.slot}) on {e.server?.name} {e.server?.host}</option>)}
                 {envs.length === 0 && <option value="">No environments in this project</option>}
               </select>
