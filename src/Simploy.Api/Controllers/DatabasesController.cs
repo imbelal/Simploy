@@ -26,6 +26,7 @@ public class DatabasesController(SimployDbContext db, DatabaseService dbService)
         var (port, username, databaseName) = req.Type.ToLowerInvariant() switch
         {
             "mysql" => (3306, "app", req.Name),
+            "mssql" => (1433, "sa", req.Name),
             "redis" => (6379, "", req.Name),
             "mongodb" => (27017, "root", req.Name),
             _ => (5432, "app", req.Name),

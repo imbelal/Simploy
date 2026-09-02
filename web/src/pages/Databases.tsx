@@ -36,9 +36,10 @@ export default function Databases() {
             <input className={inputCls} value={form.name} onChange={e => setForm({ ...form, name: e.target.value.toLowerCase().replace(/[^a-z0-9]+/g, '-') })} placeholder="mydb" />
           </Field>
           <Field label="Type">
-            <select className={inputCls} value={form.type} onChange={e => setForm({ ...form, type: e.target.value, version: e.target.value === 'postgres' ? '16' : e.target.value === 'mysql' ? '8' : e.target.value === 'redis' ? '7' : '7' })}>
+            <select className={inputCls} value={form.type} onChange={e => setForm({ ...form, type: e.target.value, version: e.target.value === 'postgres' ? '16' : e.target.value === 'mysql' ? '8' : e.target.value === 'mssql' ? '2022' : e.target.value === 'redis' ? '7' : '7' })}>
               <option value="postgres">PostgreSQL</option>
               <option value="mysql">MySQL</option>
+              <option value="mssql">MSSQL (SQL Server)</option>
               <option value="redis">Redis</option>
               <option value="mongodb">MongoDB</option>
             </select>

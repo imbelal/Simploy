@@ -246,6 +246,9 @@ public class DockerService(IConfiguration config, ILogger<DockerService> log)
             compose.AppendLine("    command: [\"sh\",\"-c\",\"exec redis-server --requirepass \\\"$REDIS_PASSWORD\\\"\"]");
         compose.AppendLine("    env_file: .env");
         compose.AppendLine("    restart: unless-stopped");
+        // SQL Server 2022 runs as non-root and can't write its data dir; run as root so it self-manages.
+        if (req.Type.Equals("mssql", StringComparison.OrdinalIgnoreCase))
+            compose.AppendLine("    user: root");
         compose.AppendLine("    volumes:");
 
         // Bind mount to a host dir (writable) if requested, else a Docker named volume.
@@ -300,6 +303,7 @@ public class DockerService(IConfiguration config, ILogger<DockerService> log)
         ("mysql", var v) => ($"mysql:{v}", "/var/lib/mysql", "mysqladmin ping -h localhost -u root -p\"$MYSQL_ROOT_PASSWORD\" || exit 1"),
         ("redis", var v) => ($"redis:{v}-alpine", "/data", "redis-cli -a \"$REDIS_PASSWORD\" ping | grep PONG"),
         ("mongodb", var v) => ($"mongo:{v}", "/data/db", "mongosh --quiet --eval \"db.runCommand('ping').ok\" --username $MONGO_INITDB_ROOT_USERNAME --password $MONGO_INITDB_ROOT_PASSWORD admin | grep 1"),
+        ("mssql", var v) => ($"mcr.microsoft.com/mssql/server:{v}-latest", "/var/opt/mssql", "/opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P \"$MSSQL_SA_PASSWORD\" -Q 'SELECT 1' -No || exit 1"),
         _ => ($"postgres:{req.Version}-alpine", "/var/lib/postgresql/data", "pg_isready -U \"$POSTGRES_USER\" -d \"$POSTGRES_DB\""),
     };
 
@@ -318,6 +322,11 @@ public class DockerService(IConfiguration config, ILogger<DockerService> log)
             "mongodb" => new() {
                 ["MONGO_INITDB_ROOT_USERNAME"] = req.Username,
                 ["MONGO_INITDB_ROOT_PASSWORD"] = req.Password,
+            },
+            "mssql" => new() {
+                ["ACCEPT_EULA"] = "Y",
+                ["MSSQL_SA_PASSWORD"] = req.Password,
+                ["MSSQL_PID"] = "Express",
             },
             _ => new() {
                 ["POSTGRES_DB"] = req.DatabaseName,
