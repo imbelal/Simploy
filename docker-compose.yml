@@ -63,6 +63,22 @@ services:
       - /opt/simploy/.proxy/Caddyfile:/etc/caddy/Caddyfile
       - /opt/simploy/.proxy/apps:/etc/caddy/apps
 
+  # Agent — runs on the same VM as the control plane (Option A). Built from source,
+  # uses the host network + docker socket so it can deploy apps and run backups.
+  agent:
+    build: { context: ., dockerfile: src/Simploy.Agent/Dockerfile }
+    image: simploy-agent
+    container_name: simploy-agent
+    restart: unless-stopped
+    network_mode: host
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - /opt/simploy:/opt/simploy
+    environment:
+      ASPNETCORE_HTTP_PORTS: 8089
+      Agent__Token: "${SIMPLOY_AGENT_TOKEN:-simploy-agent-token-change-me}"
+      ControlPlane__Domain: "${SIMPLOY_CONTROL_DOMAIN:-}"
+
 volumes:
   pgdata:
 
