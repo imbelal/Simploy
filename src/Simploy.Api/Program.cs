@@ -84,6 +84,7 @@ using (var scope = app.Services.CreateScope())
             );
             CREATE UNIQUE INDEX IF NOT EXISTS "IX_Databases_ServerId_Name" ON "Databases"("ServerId", "Name");
             """);
+        db.Database.ExecuteSqlRaw("ALTER TABLE \"Databases\" ADD COLUMN IF NOT EXISTS \"DataPath\" text NULL;");
         db.Database.ExecuteSqlRaw("""
             CREATE TABLE IF NOT EXISTS "BackupSettings" (
                 "Id" uuid NOT NULL PRIMARY KEY,

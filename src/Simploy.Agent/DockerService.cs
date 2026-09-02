@@ -246,7 +246,21 @@ public class DockerService(IConfiguration config, ILogger<DockerService> log)
         compose.AppendLine("    env_file: .env");
         compose.AppendLine("    restart: unless-stopped");
         compose.AppendLine("    volumes:");
-        compose.AppendLine($"      - {dataVolume}:{volumePath}");
+
+        // Bind mount to a host dir (writable) if requested, else a Docker named volume.
+        if (!string.IsNullOrWhiteSpace(req.DataPath))
+        {
+            var hostDir = req.DataPath!.Trim();
+            await RunAsync("sh", $"-c \"mkdir -p {hostDir} && chmod -R 0777 {hostDir}\"", ct);
+            compose.AppendLine($"      - {hostDir}:{volumePath}");
+            dataVolume = "";
+        }
+        else
+        {
+            dataVolume = $"{dbName}-data";
+            compose.AppendLine($"      - {dataVolume}:{volumePath}");
+        }
+
         compose.AppendLine("    healthcheck:");
         // YAML-escape the healthcheck shell command (it may contain double quotes).
         var escaped = healthcheck.Replace("\\", "\\\\").Replace("\"", "\\\"");
@@ -256,8 +270,11 @@ public class DockerService(IConfiguration config, ILogger<DockerService> log)
         compose.AppendLine("      retries: 20");
         compose.AppendLine("    networks:");
         compose.AppendLine("      - simploy-proxy");
-        compose.AppendLine("volumes:");
-        compose.AppendLine($"  {dataVolume}:");
+        if (!string.IsNullOrEmpty(dataVolume))
+        {
+            compose.AppendLine("volumes:");
+            compose.AppendLine($"  {dataVolume}:");
+        }
         compose.AppendLine("networks:");
         compose.AppendLine("  simploy-proxy:");
         compose.AppendLine("    external: true");

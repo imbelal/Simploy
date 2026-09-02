@@ -41,6 +41,7 @@ public class DatabasesController(SimployDbContext db, DatabaseService dbService)
             Password = GeneratePassword(),
             DatabaseName = databaseName,
             Port = port,
+            DataPath = string.IsNullOrWhiteSpace(req.DataPath) ? null : req.DataPath.Trim(),
             Status = "Pending",
         };
         db.Databases.Add(d);
@@ -76,4 +77,4 @@ public class DatabasesController(SimployDbContext db, DatabaseService dbService)
     }
 }
 
-public record CreateDatabaseRequest(string Name, string Type, string Version, Guid ServerId);
+public record CreateDatabaseRequest(string Name, string Type, string Version, Guid ServerId, string? DataPath);

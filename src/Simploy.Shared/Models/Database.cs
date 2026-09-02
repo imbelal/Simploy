@@ -19,6 +19,9 @@ public class Database
     public string DatabaseName { get; set; } = default!;
     public int Port { get; set; } = 5432;
 
+    /// <summary>Optional host directory for the data (bind mount). Empty = Docker named volume.</summary>
+    public string? DataPath { get; set; }
+
     public string Status { get; set; } = "Pending"; // Pending | Running | Failed | Removed
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 }

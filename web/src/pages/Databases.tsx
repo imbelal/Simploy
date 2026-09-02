@@ -5,7 +5,7 @@ import { Badge, Button, Card, EmptyState, Field, PageHeader, Panel, inputCls } f
 export default function Databases() {
   const [dbs, setDbs] = useState<any[]>([])
   const [servers, setServers] = useState<any[]>([])
-  const [form, setForm] = useState({ name: '', type: 'postgres', version: '16', serverId: '' })
+  const [form, setForm] = useState({ name: '', type: 'postgres', version: '16', serverId: '', dataPath: '' })
   const [msg, setMsg] = useState('')
 
   const load = () => {
@@ -51,6 +51,9 @@ export default function Databases() {
               <option value="">Select server…</option>
               {servers.map(s => <option key={s.id} value={s.id}>{s.name} ({s.host})</option>)}
             </select>
+          </Field>
+          <Field label="Data path (optional)" hint="Host directory for the data (bind mount). Leave blank for a Docker volume. Use a path under /opt/simploy, e.g. /opt/simploy/data/mydb.">
+            <input className={inputCls} placeholder="/opt/simploy/data/mydb" value={form.dataPath} onChange={e => setForm({ ...form, dataPath: e.target.value })} />
           </Field>
         </div>
         <div className="flex items-center gap-3 mt-4">

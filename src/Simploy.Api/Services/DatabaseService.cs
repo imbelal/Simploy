@@ -22,7 +22,7 @@ public class DatabaseService(IServiceProvider sp, IConfiguration config, ILogger
         var item = await db.Databases.Include(d => d.Server).FirstOrDefaultAsync(d => d.Id == job.Id, ct);
         if (item?.Server is null) return;
 
-        var payload = new AgentDbRequest(item.Name, item.Type, item.Version, item.Username, item.Password, item.DatabaseName, item.Port, item.Slot);
+        var payload = new AgentDbRequest(item.Name, item.Type, item.Version, item.Username, item.Password, item.DatabaseName, item.Port, item.Slot, item.DataPath);
         var agentUrl = $"http://{item.Server.Host}:8089";
         try
         {
