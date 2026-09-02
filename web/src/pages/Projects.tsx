@@ -49,8 +49,12 @@ export default function Projects() {
       if (!host) continue
       if (target && target.includes(':')) {
         domains.push({ host, targetService: target, enableHttps, isStatic: false, weighted: false, weight: 0 })
+      } else if (target) {
+        // explicit port
+        domains.push({ host, targetPort: +target, enableHttps, isStatic: false, weighted: false, weight: 0 })
       } else {
-        domains.push({ host, targetPort: target ? +target : 8080, enableHttps, isStatic: false, weighted: false, weight: 0 })
+        // no target -> agent auto-detects the service + port from the domain / compose
+        domains.push({ host, enableHttps, isStatic: false, weighted: false, weight: 0 })
       }
     }
     await api.envs.setDomains(domEdit.id, domains)
