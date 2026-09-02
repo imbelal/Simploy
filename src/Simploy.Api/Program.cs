@@ -29,6 +29,7 @@ else
 builder.Services.AddSingleton<DeploymentService>();
 builder.Services.AddSingleton<GitHubAppService>();
 builder.Services.AddSingleton<DatabaseService>();
+builder.Services.AddSingleton<BackupService>();
 builder.Services.AddHostedService<DeploymentWorker>();
 builder.Services.AddHostedService<DatabaseWorker>();
 builder.Services.AddHostedService<BackupWorker>();

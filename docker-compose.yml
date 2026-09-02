@@ -16,6 +16,8 @@ services:
   api:
     build: { context: ., dockerfile: src/Simploy.Api/Dockerfile }
     ports: ["5000:8080"]
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     environment:
       ASPNETCORE_ENVIRONMENT: Production
       ConnectionStrings__Default: "Host=postgres;Port=5432;Database=simploy;Username=postgres;Password=postgres"

@@ -8,7 +8,7 @@ using Simploy.Shared.Models;
 namespace Simploy.Api.Controllers;
 
 [ApiController, Route("api/settings/backups"), Authorize]
-public class BackupsController(SimployDbContext db, IConfiguration config) : ControllerBase
+public class BackupsController(SimployDbContext db, BackupService backup) : ControllerBase
 {
     private static async Task<BackupSettings> EnsureAsync(SimployDbContext db)
     {
@@ -40,7 +40,7 @@ public class BackupsController(SimployDbContext db, IConfiguration config) : Con
     public async Task<IActionResult> Run(CancellationToken ct)
     {
         var s = await EnsureAsync(db);
-        var result = await BackupWorker.RunBackupAsync(s, ct);
+        var result = await backup.RunAsync(s, ct);
         s.LastBackupAt = DateTime.UtcNow;
         await db.SaveChangesAsync(ct);
         return Ok(new { result });
@@ -50,13 +50,7 @@ public class BackupsController(SimployDbContext db, IConfiguration config) : Con
     public async Task<IActionResult> List(CancellationToken ct)
     {
         var s = await EnsureAsync(db);
-        var agentUrl = config["Backup:AgentUrl"] ?? "http://localhost:8089";
-        using var http = new HttpClient { Timeout = TimeSpan.FromSeconds(30) };
-        var token = config["Agent:Token"] ?? "";
-        if (!string.IsNullOrEmpty(token))
-            http.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
-        var resp = await http.GetAsync($"{agentUrl}/system/backup/list?dir={Uri.EscapeDataString(s.DestDir)}", ct);
-        var body = await resp.Content.ReadAsStringAsync(ct);
+        var body = await backup.ListAsync(s.DestDir, ct);
         return Content(body, "application/json");
     }
 }
