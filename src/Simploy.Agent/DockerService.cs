@@ -524,40 +524,60 @@ public class DockerService(IConfiguration config, ILogger<DockerService> log)
         }
     }
 
-    /// <summary>Writes this app's domain fragment into the shared proxy's config dir,
-    /// so the proxy can route to this app by name across the shared network. Ports are
-    /// auto-detected from the compose (service name -> internal port) when not pinned.</summary>
+    /// <summary>Writes this app's domain fragment into the shared proxy's config dir.
+    /// The service is auto-matched from the domain name (e.g. 'staging-seq' -> 'seq'),
+    /// and the port is auto-detected from the compose. Just add the domain.</summary>
     private async Task WriteProxyFragmentAsync(AgentDeployRequest req, string appService, int port, string composeContent, CancellationToken ct)
     {
         if (req.Domains is null || req.Domains.Count == 0) return;
         Directory.CreateDirectory(ProxyAppsDir);
+        var services = GetServices(composeContent);
         var sb = new StringBuilder();
         foreach (var d in req.Domains)
         {
             if (d.IsStatic || string.IsNullOrWhiteSpace(d.Host)) continue;
             sb.AppendLine(d.EnableHttps ? $"{d.Host} {{" : $"http://{d.Host} {{");
 
-            string target;
-            if (!string.IsNullOrWhiteSpace(d.TargetService))
-            {
-                // "seq" -> auto port, or "seq:80" -> pinned.
-                var parts = d.TargetService.Split(':');
-                var svc = parts[0].Trim();
-                var p = parts.Length > 1 ? parts[1].Trim() : (GetServiceInternalPort(composeContent, svc) ?? 8080).ToString();
-                target = $"{svc}:{p}";
-            }
-            else
-            {
-                var p = d.TargetPort ?? GetServiceInternalPort(composeContent, appService) ?? 8080;
-                target = $"{appService}:{p}";
-            }
-            sb.AppendLine($"    reverse_proxy {target}");
+            // Service: pinned target > auto-matched from host labels > the app's main service.
+            var svc = d.TargetService?.Split(':')[0].Trim();
+            var pinPort = d.TargetService?.Contains(':') == true ? d.TargetService!.Split(':')[1].Trim() : null;
+            svc = !string.IsNullOrWhiteSpace(svc) ? svc : (MatchService(d.Host, services) ?? appService);
+            var p = pinPort ?? (d.TargetPort ?? GetServiceInternalPort(composeContent, svc) ?? 8080).ToString();
+            sb.AppendLine($"    reverse_proxy {svc}:{p}");
             sb.AppendLine("}");
             sb.AppendLine();
         }
         var file = Path.Combine(ProxyAppsDir, $"{ComposeRenderer.Sanitize(req.ProjectSlug)}-{ComposeRenderer.Sanitize(req.Slot)}.conf");
         await File.WriteAllTextAsync(file, sb.ToString(), ct);
         log.LogInformation("Wrote proxy fragment {File}", file);
+    }
+
+    /// <summary>Finds a compose service whose name appears as a label of the domain host
+    /// (e.g. 'staging-seq.imbelal.com' -> 'seq'), else null.</summary>
+    private static string? MatchService(string host, List<string> services)
+    {
+        var labels = host.ToLowerInvariant().Split('.');
+        foreach (var svc in services)
+            if (labels.Contains(svc.ToLowerInvariant())) return svc;
+        return null;
+    }
+
+    /// <summary>Lists the top-level service names in a compose.</summary>
+    private static List<string> GetServices(string? composeContent)
+    {
+        var result = new List<string>();
+        if (string.IsNullOrWhiteSpace(composeContent)) return result;
+        var inServices = false;
+        foreach (var raw in composeContent.Split('\n'))
+        {
+            if (string.IsNullOrWhiteSpace(raw)) continue;
+            var indent = raw.Length - raw.TrimStart().Length;
+            var t = raw.Trim();
+            if (!inServices) { if (indent == 0 && t.StartsWith("services:")) inServices = true; continue; }
+            if (indent == 0) break;
+            if (indent == 2 && t.EndsWith(":")) { var name = t.TrimEnd(':'); if (!result.Contains(name)) result.Add(name); }
+        }
+        return result;
     }
 
     /// <summary>Best-effort parse of a service's internal (container) port from the compose.
