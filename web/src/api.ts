@@ -47,6 +47,7 @@ export const api = {
     list: () => req<any[]>('/api/projects'),
     create: (b: any) => req<any>('/api/projects', { method: 'POST', body: JSON.stringify(b) }),
     del: (id: string) => req<any>(`/api/projects/${id}`, { method: 'DELETE' }),
+    branches: (id: string) => req<any>(`/api/github/projects/${id}/branches`),
   },
   envs: {
     list: (projectId?: string) => req<any[]>(`/api/environments${projectId ? `?projectId=${projectId}` : ''}`),

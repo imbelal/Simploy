@@ -38,6 +38,24 @@ public class GitHubController(SimployDbContext db, GitHubAppService github) : Co
         return Ok(await github.ListRepositoriesAsync(installationId, ct));
     }
 
+    /// <summary>Lists the branches + default branch for a project's repo (for the env modal).</summary>
+    [HttpGet("projects/{projectId:guid}/branches")]
+    public async Task<IActionResult> Branches(Guid projectId, CancellationToken ct)
+    {
+        var p = await db.Projects.FindAsync(projectId);
+        if (p?.GitRepository is null) return BadRequest(new { error = "Project has no git repo" });
+        var repoStr = p.GitRepository.Trim();
+        if (!repoStr.Contains("://")) repoStr = $"https://{repoStr}";
+        try
+        {
+            var uri = new Uri(repoStr);
+            var ownerRepo = uri.AbsolutePath.Trim('/');
+            var (branches, def) = await github.GetBranchesAsync(ownerRepo, p.GithubInstallationId, ct);
+            return Ok(new { branches, defaultBranch = def });
+        }
+        catch (Exception ex) { return BadRequest(new { error = ex.Message }); }
+    }
+
     /// <summary>Binds a project to a GitHub App installation (used to mint tokens on deploy).</summary>
     [HttpPut("projects/{projectId:guid}/installation")]
     public async Task<IActionResult> BindProject(Guid projectId, BindInstallationRequest req)

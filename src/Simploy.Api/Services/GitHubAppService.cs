@@ -73,6 +73,25 @@ public class GitHubAppService(IConfiguration cfg)
         return json.GetProperty("token").GetString()!;
     }
 
+    /// <summary>Lists branches + default branch for a repo. Uses the installation token for
+    /// private repos, or the public API (no auth) for public ones.</summary>
+    public async Task<(List<string> branches, string defaultBranch)> GetBranchesAsync(string ownerRepo, string? installationId, CancellationToken ct = default)
+    {
+        var url = $"https://api.github.com/repos/{ownerRepo}";
+        using var http = new HttpClient { Timeout = TimeSpan.FromSeconds(15) };
+        http.DefaultRequestHeaders.UserAgent.ParseAdd("simploy");
+        http.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/vnd.github+json"));
+        if (!string.IsNullOrEmpty(installationId) && IsConfigured)
+            http.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", await GetInstallationTokenAsync(installationId, ct));
+
+        var repoJson = await http.GetFromJsonAsync<JsonElement>(url, ct);
+        var def = repoJson.TryGetProperty("default_branch", out var db) ? db.GetString() ?? "main" : "main";
+
+        var b = await http.GetFromJsonAsync<JsonElement>($"{url}/branches?per_page=100", ct);
+        var branches = b.EnumerateArray().Select(x => x.GetProperty("name").GetString()!).ToList();
+        return (branches, def);
+    }
+
     /// <summary>Lists the installations this app is installed on (account + id).</summary>
     public async Task<List<GitHubInstallationDto>> ListInstallationsAsync(CancellationToken ct = default)
     {

@@ -91,16 +91,23 @@ export default function Projects() {
   }
   const [envModal, setEnvModal] = useState<any>(null)
   const [envForm, setEnvForm] = useState({ name: 'production', serverId: '', slot: 'prod', branch: 'main', imageTag: 'prod' })
-  const openEnvModal = (projectId: string) => {
+  const [envBranches, setEnvBranches] = useState<string[]>([])
+  const openEnvModal = async (projectId: string) => {
     if (servers.length === 0) return setMsg('Add a server in Servers first')
     setEnvModal(projectId)
     setEnvForm({ name: 'production', serverId: servers[0].id, slot: 'prod', branch: 'main', imageTag: 'prod' })
+    setEnvBranches([])
+    try {
+      const b = await api.projects.branches(projectId)
+      setEnvBranches(b.branches || [])
+      setEnvForm(f => ({ ...f, branch: b.defaultBranch || (b.branches?.[0] ?? 'main') }))
+    } catch { }
   }
   const createEnvironment = async () => {
     if (!envModal) return
     const name = envForm.name.trim() || 'production'
     const slot = envForm.slot.trim() || (name === 'production' ? 'prod' : 'staging')
-    await api.envs.create({ projectId: envModal, serverId: envForm.serverId, name, slot, imageTag: envForm.imageTag || slot })
+    await api.envs.create({ projectId: envModal, serverId: envForm.serverId, name, slot, imageTag: envForm.imageTag || slot, branch: envForm.branch })
     setEnvModal(null)
     setMsg(`Environment ${name} added on ${slot}`)
     load()
@@ -326,8 +333,14 @@ export default function Projects() {
               <Field label="Slot" hint="Compose project name; keeps stacks separate. e.g. prod">
                 <input className={inputCls} value={envForm.slot} onChange={e => setEnvForm({ ...envForm, slot: e.target.value })} />
               </Field>
-              <Field label="Git branch" hint="Branch to build from.">
-                <input className={inputCls} value={envForm.branch} onChange={e => setEnvForm({ ...envForm, branch: e.target.value })} />
+              <Field label="Git branch" hint="Branch to build from (loaded from the repo).">
+                {envBranches.length > 0 ? (
+                  <select className={inputCls} value={envForm.branch} onChange={e => setEnvForm({ ...envForm, branch: e.target.value })}>
+                    {envBranches.map(b => <option key={b} value={b}>{b}</option>)}
+                  </select>
+                ) : (
+                  <input className={inputCls} value={envForm.branch} onChange={e => setEnvForm({ ...envForm, branch: e.target.value })} placeholder="master" />
+                )}
               </Field>
               <Field label="Image tag" hint="Tag for built images.">
                 <input className={inputCls} value={envForm.imageTag} onChange={e => setEnvForm({ ...envForm, imageTag: e.target.value })} />
