@@ -53,8 +53,11 @@ public class ServersController(SimployDbContext db, IConfiguration config) : Con
         var token = config["Agent:Token"] ?? "";
         if (!string.IsNullOrEmpty(token))
             http.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
-        var body = await http.GetStringAsync($"http://{s.Host}:8089/containers", ct);
-        return Content(body, "application/json");
+        var resp = await http.GetAsync($"http://{s.Host}:8089/containers", ct);
+        if (!resp.IsSuccessStatusCode)
+            return StatusCode((int)resp.StatusCode, new { error = "agent returned " + (int)resp.StatusCode });
+        using var stream = await resp.Content.ReadAsStreamAsync(ct);
+        return new Microsoft.AspNetCore.Mvc.FileStreamResult(stream, "application/json");
     }
 
     /// <summary>Lists TLS certificates held by the shared Caddy proxy on a server.</summary>
@@ -67,8 +70,11 @@ public class ServersController(SimployDbContext db, IConfiguration config) : Con
         var token = config["Agent:Token"] ?? "";
         if (!string.IsNullOrEmpty(token))
             http.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
-        var body = await http.GetStringAsync($"http://{s.Host}:8089/certificates", ct);
-        return Content(body, "application/json");
+        var resp = await http.GetAsync($"http://{s.Host}:8089/certificates", ct);
+        if (!resp.IsSuccessStatusCode)
+            return StatusCode((int)resp.StatusCode, new { error = "agent returned " + (int)resp.StatusCode });
+        using var stream = await resp.Content.ReadAsStreamAsync(ct);
+        return new Microsoft.AspNetCore.Mvc.FileStreamResult(stream, "application/json");
     }
 
     /// <summary>Live per-container CPU/memory snapshot (via the agent).</summary>
@@ -81,8 +87,13 @@ public class ServersController(SimployDbContext db, IConfiguration config) : Con
         var token = config["Agent:Token"] ?? "";
         if (!string.IsNullOrEmpty(token))
             http.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
-        var body = await http.GetStringAsync($"http://{s.Host}:8089/metrics/containers", ct);
-        return Content(body, "application/json");
+        var resp = await http.GetAsync($"http://{s.Host}:8089/metrics/containers", ct);
+        if (!resp.IsSuccessStatusCode)
+            return StatusCode((int)resp.StatusCode, new { error = "agent returned " + (int)resp.StatusCode });
+        // Re-emit as real JSON so the array shape is preserved (Content() would
+        // escape the body as a JSON string, breaking the frontend's array parse).
+        using var stream = await resp.Content.ReadAsStreamAsync(ct);
+        return new Microsoft.AspNetCore.Mvc.FileStreamResult(stream, "application/json");
     }
 
     /// <summary>Streams a container's logs (SSE pass-through from the agent).</summary>
