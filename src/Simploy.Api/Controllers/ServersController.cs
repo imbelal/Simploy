@@ -56,8 +56,10 @@ public class ServersController(SimployDbContext db, IConfiguration config) : Con
         var resp = await http.GetAsync($"http://{s.Host}:8089/containers", ct);
         if (!resp.IsSuccessStatusCode)
             return StatusCode((int)resp.StatusCode, new { error = "agent returned " + (int)resp.StatusCode });
-        using var stream = await resp.Content.ReadAsStreamAsync(ct);
-        return new Microsoft.AspNetCore.Mvc.FileStreamResult(stream, "application/json");
+        // Buffer the agent body — streaming it directly from the upstream HttpResponseMessage
+        // disposes the stream before ASP.NET writes it (ObjectDisposedException -> 500).
+        var body = await resp.Content.ReadAsByteArrayAsync(ct);
+        return new Microsoft.AspNetCore.Mvc.FileContentResult(body, "application/json");
     }
 
     /// <summary>Lists TLS certificates held by the shared Caddy proxy on a server.</summary>
@@ -73,8 +75,8 @@ public class ServersController(SimployDbContext db, IConfiguration config) : Con
         var resp = await http.GetAsync($"http://{s.Host}:8089/certificates", ct);
         if (!resp.IsSuccessStatusCode)
             return StatusCode((int)resp.StatusCode, new { error = "agent returned " + (int)resp.StatusCode });
-        using var stream = await resp.Content.ReadAsStreamAsync(ct);
-        return new Microsoft.AspNetCore.Mvc.FileStreamResult(stream, "application/json");
+        var body = await resp.Content.ReadAsByteArrayAsync(ct);
+        return new Microsoft.AspNetCore.Mvc.FileContentResult(body, "application/json");
     }
 
     /// <summary>Live per-container CPU/memory snapshot (via the agent).</summary>
@@ -90,10 +92,10 @@ public class ServersController(SimployDbContext db, IConfiguration config) : Con
         var resp = await http.GetAsync($"http://{s.Host}:8089/metrics/containers", ct);
         if (!resp.IsSuccessStatusCode)
             return StatusCode((int)resp.StatusCode, new { error = "agent returned " + (int)resp.StatusCode });
-        // Re-emit as real JSON so the array shape is preserved (Content() would
-        // escape the body as a JSON string, breaking the frontend's array parse).
-        using var stream = await resp.Content.ReadAsStreamAsync(ct);
-        return new Microsoft.AspNetCore.Mvc.FileStreamResult(stream, "application/json");
+        // Buffer the agent body — streaming it directly from the upstream HttpResponseMessage
+        // disposes the stream before ASP.NET writes it (ObjectDisposedException -> 500).
+        var body = await resp.Content.ReadAsByteArrayAsync(ct);
+        return new Microsoft.AspNetCore.Mvc.FileContentResult(body, "application/json");
     }
 
     /// <summary>Streams a container's logs (SSE pass-through from the agent).</summary>
