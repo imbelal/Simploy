@@ -7,7 +7,7 @@ import { Badge, Button, Card, EmptyState, Field, PageHeader, Panel, inputCls } f
 export default function Projects() {
   const [projects, setProjects] = useState<any[]>([])
   const [servers, setServers] = useState<any[]>([])
-  const [form, setForm] = useState({ name: 'BdShopManager', slug: 'bdshopmanager', imageRepository: 'ghcr.io/imbelal/bdshopmanager', gitRepository: 'https://github.com/imbelal/BdShopManager', gitToken: '', registryUsername: '', registryPassword: '', dockerfilePath: 'src/WebApi/Dockerfile', dockerContext: '.', template: 'static' })
+  const [form, setForm] = useState({ name: 'BdShopManager', slug: 'bdshopmanager', imageRepository: 'ghcr.io/imbelal/bdshopmanager', gitRepository: 'https://github.com/imbelal/BdShopManager', gitToken: '', registryUsername: '', registryPassword: '', dockerfilePath: 'src/WebApi/Dockerfile', dockerContext: '.', template: '' })
   const [showPrivate, setShowPrivate] = useState(false)
   const [msg, setMsg] = useState('')
   const [envEdit, setEnvEdit] = useState<any>(null)
@@ -88,7 +88,8 @@ export default function Projects() {
       next: { df: 'Dockerfile', ctx: '.', port: '3000' },
       django: { df: 'Dockerfile', ctx: '.', port: '8000' },
     }
-    setForm(f => ({ ...f, template: t, dockerfilePath: map[t]?.df ?? f.dockerfilePath, dockerContext: map[t]?.ctx ?? f.dockerContext }))
+    const m = map[t]
+    setForm(f => ({ ...f, template: t, dockerfilePath: m?.df ?? f.dockerfilePath, dockerContext: m?.ctx ?? f.dockerContext }))
   }
   const delProject = async (id: string) => {
     if (!confirm('Delete project + all its environments?')) return
@@ -186,8 +187,9 @@ export default function Projects() {
           <Field label="Project name" hint="Display name, e.g. BdShopManager">
             <input className={inputCls} value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} />
           </Field>
-          <Field label="Template" hint="Used when the repo ships no Dockerfile — Simploy generates one (port auto-set).">
+          <Field label="Template (optional)" hint="Only used if the repo ships no Dockerfile. 'None' auto-detects a frontend (package.json); pick a stack otherwise.">
             <select className={inputCls} value={form.template} onChange={e => applyTemplate(e.target.value)}>
+              <option value="">None (auto-detect)</option>
               <option value="static">Static (Vite/React/Vue) · nginx :8080</option>
               <option value="react">React (Vite) · nginx :8080</option>
               <option value="vite">Vite · nginx :8080</option>
