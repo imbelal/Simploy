@@ -806,6 +806,21 @@ public class DockerService(IConfiguration config, ILogger<DockerService> log)
         return await client.Containers.ListContainersAsync(new ContainersListParameters { All = false });
     }
 
+    /// <summary>Restarts all running app containers (skips the control-plane ones).</summary>
+    public async Task<List<string>> RestartAppContainersAsync(CancellationToken ct)
+    {
+        var result = new List<string>();
+        foreach (var c in await ListContainersAsync())
+        {
+            var name = c.Names.FirstOrDefault()?.TrimStart('/') ?? "";
+            if (string.IsNullOrEmpty(name)) continue;
+            if (name.StartsWith("simploy-", StringComparison.Ordinal)) continue; // control plane
+            await RunAsync("docker", $"restart {name}", ct);
+            result.Add(name);
+        }
+        return result;
+    }
+
     /// <summary>Streams a container's logs line-by-line (SSE) until the client disconnects.</summary>
     public async Task StreamContainerLogsAsync(string name, int tail, Func<string, Task> writeLine, CancellationToken ct)
     {

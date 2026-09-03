@@ -16,6 +16,33 @@ public class ServersController(SimployDbContext db, IConfiguration config) : Con
     [HttpGet("{id:guid}")]
     public async Task<ActionResult<Server>> Get(Guid id) => await db.Servers.FindAsync(id) is { } s ? s : NotFound();
 
+    /// <summary>Restarts running app containers on every server (skips the control plane).</summary>
+    [HttpPost("containers/restart")]
+    public async Task<IActionResult> RestartAllContainers(CancellationToken ct)
+    {
+        var servers = await db.Servers.ToListAsync(ct);
+        var restarted = 0;
+        foreach (var s in servers)
+        {
+            try
+            {
+                using var http = new HttpClient { Timeout = TimeSpan.FromSeconds(30) };
+                var token = config["Agent:Token"] ?? "";
+                if (!string.IsNullOrEmpty(token))
+                    http.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
+                var resp = await http.PostAsync($"http://{s.Host}:8089/system/containers/restart", null, ct);
+                var body = await resp.Content.ReadAsStringAsync(ct);
+                if (resp.IsSuccessStatusCode)
+                {
+                    using var doc = System.Text.Json.JsonDocument.Parse(body);
+                    if (doc.RootElement.TryGetProperty("restarted", out var n)) restarted += n.GetInt32();
+                }
+            }
+            catch { }
+        }
+        return Ok(new { restarted });
+    }
+
     /// <summary>Lists the running containers on a server (via the agent).</summary>
     [HttpGet("{id:guid}/containers")]
     public async Task<IActionResult> Containers(Guid id, CancellationToken ct)

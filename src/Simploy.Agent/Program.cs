@@ -87,6 +87,13 @@ app.MapGet("/containers/{name}/logs", async (string name, string? tail, HttpCont
     }, ct);
 });
 
+app.MapPost("/system/containers/restart", async (DockerService docker, ILogger<Program> log, CancellationToken ct) =>
+{
+    var names = await docker.RestartAppContainersAsync(ct);
+    log.LogInformation("Restarted app containers: {Names}", string.Join(", ", names));
+    return Results.Ok(new { restarted = names.Count });
+});
+
 // Managed database provisioning
 app.MapPost("/db/deploy", async (AgentDbRequest req, DockerService docker, ILogger<Program> log, CancellationToken ct) =>
 {
