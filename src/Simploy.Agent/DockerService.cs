@@ -608,9 +608,15 @@ public class DockerService(IConfiguration config, ILogger<DockerService> log)
         var results = new List<object>();
         if (GetContainerId(ProxyCaddy, ct) is null) return results;
 
-        // Enumerate every .crt under /data/caddy/certificates recursively.
-        var find = await RunStdoutOnlyAsync("docker",
-            $"exec {ProxyCaddy} sh -c \"find /data/caddy/certificates -type f -name '*.crt' 2>/dev/null\"", ct);
+        // Enumerate every .crt under /data/caddy/certificates recursively. Use a tolerant
+        // exec so a missing certs dir (Caddy hasn't issued yet) returns empty, not an error.
+        string find;
+        try
+        {
+            find = await RunStdoutOnlyAsync("docker",
+                $"exec {ProxyCaddy} sh -c \"find /data/caddy/certificates -type f -name '*.crt' 2>/dev/null\"", ct);
+        }
+        catch { return results; } // find errored (e.g. no certs yet) -> nothing to report
         if (string.IsNullOrWhiteSpace(find)) return results;
 
         foreach (var crt in find.Split('\n', StringSplitOptions.RemoveEmptyEntries).Select(f => f.Trim()))
