@@ -62,7 +62,7 @@ export default function Backups() {
                 <td className="px-5 py-2.5 font-mono text-xs text-slate-700">{f.name}</td>
                 <td className="px-4 py-2.5 text-xs text-slate-500">{new Date(f.created).toLocaleString()}</td>
                 <td className="px-4 py-2.5 text-xs text-slate-500">{(f.size / 1024).toFixed(1)} KB</td>
-                <td className="px-4 py-2.5"><Button size="sm" variant="danger" onClick={() => restore(f.name)}>Restore</Button></td>
+                <td className="px-4 py-2.5"><Button size="sm" variant="danger" onClick={() => restore(f.file || f.name)}>Restore</Button></td>
               </tr>
             ))}
             {files.length === 0 && <tr><td colSpan={4}><EmptyState title="No backups yet">Enable backups or click “Back up now”.</EmptyState></td></tr>}
