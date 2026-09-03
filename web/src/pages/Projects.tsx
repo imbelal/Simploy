@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { api } from '../api'
+import { toast } from '../toast'
 import { Badge, Button, Card, EmptyState, Field, PageHeader, Panel, inputCls } from '../components/Field'
 
 export default function Projects() {
@@ -70,12 +71,13 @@ export default function Projects() {
   }
   useEffect(() => { load() }, [])
 
+  const [busy, setBusy] = useState(false)
   const create = async () => {
-    if (!form.slug) return setMsg('Slug is required')
+    if (!form.slug) return toast('Slug is required', 'error')
     const payload = { ...form, imageRepository: (form.imageRepository || form.slug).trim(), gitRepository: form.gitRepository || null }
-    await api.projects.create(payload)
-    setMsg('Project created' + (form.gitToken || form.registryPassword ? ' with private auth' : ' (public)'))
-    load()
+    setBusy(true)
+    try { await api.projects.create(payload); toast('Project created' + (form.gitToken || form.registryPassword ? ' with private auth' : ' (public)')); load() }
+    catch (e: any) { toast(e.message, 'error') } finally { setBusy(false) }
   }
   const delProject = async (id: string) => {
     if (!confirm('Delete project + all its environments?')) return
@@ -216,7 +218,7 @@ export default function Projects() {
         )}
 
         <div className="flex items-center gap-3 mt-4">
-          <Button variant="primary" onClick={create}>Create project</Button>
+          <Button variant="primary" onClick={create} loading={busy}>Create project</Button>
           {msg && <div className="text-xs text-slate-500 font-mono">{msg}</div>}
         </div>
       </Panel>

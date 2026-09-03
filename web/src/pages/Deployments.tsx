@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { api } from '../api'
+import { toast } from '../toast'
 import { Badge, Button, Card, EmptyState, Field, PageHeader, Panel, inputCls } from '../components/Field'
 
 const statusInfo: Record<string, { label: string; tone: 'pending' | 'blue' | 'ok' | 'red' | 'slate' }> = {
@@ -20,6 +21,7 @@ export default function Deployments() {
   const [projectId, setProjectId] = useState('')
   const [envId, setEnvId] = useState('')
   const [msg, setMsg] = useState('')
+  const [busy, setBusy] = useState('')
   const [openLog, setOpenLog] = useState<string | null>(null)
   const [liveLog, setLiveLog] = useState('')
   const [liveStatus, setLiveStatus] = useState('')
@@ -108,10 +110,10 @@ export default function Deployments() {
   const visibleDeps = projectId ? deps.filter((d: any) => projectEnvIds.has(d.environmentId)) : deps
 
   const deploy = async (strategy: string) => {
-    if (!envId) return setMsg('Pick an environment first')
-    setMsg(`Deploying ${imageTag} (${strategy})...`)
-    try { await api.deployments.create({ environmentId: envId, imageTag, strategy }); setMsg('Queued — watch table below'); load() }
-    catch (e: any) { setMsg(e.message) }
+    if (!envId) return toast('Pick an environment first', 'error')
+    setBusy('deploy')
+    try { await api.deployments.create({ environmentId: envId, imageTag, strategy }); toast(`Deploying ${imageTag} (${strategy})…`); load() }
+    catch (e: any) { toast(e.message, 'error') } finally { setBusy('') }
   }
 
   const openContainers = async () => {
@@ -123,12 +125,12 @@ export default function Deployments() {
 
   const runAll = async () => {
     if (!confirm('Re-deploy every environment and re-provision every database? This rebuilds/runs all recorded resources.')) return
-    setMsg('Running all resources — this re-deploys every app + starts every database…')
+    setBusy('runAll')
     try {
       const [d, b] = await Promise.all([api.deployments.runAll(), api.databases.runAll()])
-      setMsg(`Queued ${d.queued} deployments + ${b.queued} databases`)
+      toast(`Queued ${d.queued} deployments + ${b.queued} databases`)
       load()
-    } catch (e: any) { setMsg(e.message) }
+    } catch (e: any) { toast(e.message, 'error') } finally { setBusy('') }
   }
 
   // Stream a container's logs (SSE-over-fetch).
@@ -165,7 +167,7 @@ export default function Deployments() {
 
   return (
     <div className="space-y-6">
-      <PageHeader title="Deployments" desc="Trigger a build and see how it runs. Recreate swaps the app; Canary keeps the previous version running and shifts traffic over gradually." action={<Button variant="secondary" onClick={runAll}>Run all resources</Button>} />
+      <PageHeader title="Deployments" desc="Trigger a build and see how it runs. Recreate swaps the app; Canary keeps the previous version running and shifts traffic over gradually." action={<Button variant="secondary" onClick={runAll} loading={busy === 'runAll'}>Run all resources</Button>} />
 
       <Panel>
         <div className="font-semibold text-slate-900 mb-4">Trigger a deploy</div>
@@ -194,8 +196,8 @@ export default function Deployments() {
         )}
         {envs.length > 0 && (
           <div className="flex gap-3 mt-4 flex-wrap">
-            <Button variant="primary" onClick={() => deploy('Recreate')} title="Rebuild and swap out">Recreate</Button>
-            <Button variant="secondary" onClick={() => deploy('Canary')} title="Deploy alongside the old version, shift traffic gradually">Canary</Button>
+            <Button variant="primary" onClick={() => deploy('Recreate')} title="Rebuild and swap out" loading={busy === 'deploy'}>Recreate</Button>
+            <Button variant="secondary" onClick={() => deploy('Canary')} title="Deploy alongside the old version, shift traffic gradually" loading={busy === 'deploy'}>Canary</Button>
             <Button variant="secondary" onClick={openContainers} title="View running app container logs">Container logs</Button>
           </div>
         )}

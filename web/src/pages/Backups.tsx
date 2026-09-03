@@ -1,29 +1,32 @@
 import { useEffect, useState } from 'react'
 import { api } from '../api'
-import { Button, Card, EmptyState, Field, PageHeader, Panel, inputCls } from '../components/Field'
+import { toast } from '../toast'
+import { Button, Card, EmptyState, Field, PageHeader, Panel, Skeleton, inputCls } from '../components/Field'
 
 export default function Backups() {
   const [s, setS] = useState<any>(null)
   const [files, setFiles] = useState<any[]>([])
-  const [msg, setMsg] = useState('')
+  const [busy, setBusy] = useState('')
 
   const load = async () => {
-    const settings = await api.backups.get()
-    setS(settings)
-    try { setFiles(await api.backups.list()) } catch (e: any) { /* agent not on host */ }
+    try {
+      const settings = await api.backups.get()
+      setS(settings)
+      try { setFiles(await api.backups.list()) } catch { }
+    } catch (e: any) { toast(e.message, 'error') }
   }
   useEffect(() => { load() }, [])
 
-  const save = async () => { if (s) { await api.backups.set(s); setMsg('Saved'); load() } }
-  const run = async () => { await api.backups.run(); setMsg('Backup triggered'); load() }
+  const save = async () => { if (!s) return; setBusy('save'); try { await api.backups.set(s); toast('Backup settings saved'); load() } catch (e: any) { toast(e.message, 'error') } finally { setBusy('') } }
+  const run = async () => { setBusy('run'); try { await api.backups.run(); toast('Backup triggered'); load() } catch (e: any) { toast(e.message, 'error') } finally { setBusy('') } }
   const restore = async (file: string) => {
     if (!confirm('Restore this backup into the control-plane database? This overwrites current data. A backup is taken first.')) return
-    setMsg('Restoring…'); 
-    try { const r: any = await api.backups.restore(file); setMsg('Restored: ' + (r.result || file)) ; load() }
-    catch (e: any) { setMsg(e.message) }
+    setBusy(file)
+    try { const r: any = await api.backups.restore(file); toast('Restored: ' + (r.result || file)); load() }
+    catch (e: any) { toast(e.message, 'error') } finally { setBusy('') }
   }
 
-  if (!s) return <EmptyState title="Loading…" />
+  if (!s) return <div className="space-y-4 p-4">{Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-20 w-full" />)}</div>
 
   return (
     <div className="space-y-6">
@@ -46,9 +49,8 @@ export default function Backups() {
           </Field>
         </div>
         <div className="flex items-center gap-3 mt-4">
-          <Button variant="primary" onClick={save}>Save</Button>
-          <Button variant="secondary" onClick={run}>Back up now</Button>
-          {msg && <div className="text-xs text-slate-500">{msg}</div>}
+          <Button variant="primary" onClick={save} loading={busy === 'save'}>Save</Button>
+          <Button variant="secondary" onClick={run} loading={busy === 'run'}>Back up now</Button>
           <span className="text-xs text-slate-400 ml-auto">Last backup: {s.lastBackupAt ? new Date(s.lastBackupAt).toLocaleString() : 'never'}</span>
         </div>
       </Panel>
@@ -62,7 +64,7 @@ export default function Backups() {
                 <td className="px-5 py-2.5 font-mono text-xs text-slate-700">{f.name}</td>
                 <td className="px-4 py-2.5 text-xs text-slate-500">{new Date(f.created).toLocaleString()}</td>
                 <td className="px-4 py-2.5 text-xs text-slate-500">{(f.size / 1024).toFixed(1)} KB</td>
-                <td className="px-4 py-2.5"><Button size="sm" variant="danger" onClick={() => restore(f.file || f.name)}>Restore</Button></td>
+                <td className="px-4 py-2.5"><Button size="sm" variant="danger" loading={busy === (f.file || f.name)} onClick={() => restore(f.file || f.name)}>Restore</Button></td>
               </tr>
             ))}
             {files.length === 0 && <tr><td colSpan={4}><EmptyState title="No backups yet">Enable backups or click “Back up now”.</EmptyState></td></tr>}

@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { api } from '../api'
+import { toast } from '../toast'
 import { Badge, Button, PageHeader, Panel, StatCard } from '../components/Field'
 
 type Step = { n: number; title: string; desc: string; to: string; cta: string; tech: string }
@@ -8,7 +9,6 @@ type Step = { n: number; title: string; desc: string; to: string; cta: string; t
 export default function Dashboard() {
   const [stats, setStats] = useState({ servers: 0, projects: 0, envs: 0, deps: 0 })
   const [busy, setBusy] = useState('')
-  const [msg, setMsg] = useState('')
 
   useEffect(() => {
     Promise.all([
@@ -21,18 +21,18 @@ export default function Dashboard() {
 
   const runAll = async () => {
     if (!confirm('Re-deploy every environment and re-provision every database? This rebuilds/runs all your recorded resources.')) return
-    setBusy('runAll'); setMsg('Running all resources…')
+    setBusy('runAll')
     try {
       const [d, b] = await Promise.all([api.deployments.runAll(), api.databases.runAll()])
-      setMsg(`Queued ${d.queued} deployments + ${b.queued} databases`)
-    } catch (e: any) { setMsg(e.message) }
+      toast(`Queued ${d.queued} deployments + ${b.queued} databases`)
+    } catch (e: any) { toast(e.message, 'error') }
     setBusy('')
   }
   const restartAll = async () => {
     if (!confirm('Restart all running app containers (no rebuild)? Control plane stays up.')) return
-    setBusy('restart'); setMsg('Restarting containers…')
-    try { const r: any = await api.servers.restartContainers(); setMsg(`Restarted ${r.restarted} containers`) }
-    catch (e: any) { setMsg(e.message) }
+    setBusy('restart')
+    try { const r: any = await api.servers.restartContainers(); toast(`Restarted ${r.restarted} containers`) }
+    catch (e: any) { toast(e.message, 'error') }
     setBusy('')
   }
 
@@ -92,7 +92,7 @@ export default function Dashboard() {
           <div className="min-w-0 flex-1">
             <div className="font-semibold text-slate-900">Run all resources</div>
             <div className="text-xs text-slate-500 mt-1">Re-deploy every environment (rebuild) + re-provision every database. Brings back all recorded apps/DBs after a reset.</div>
-            <Button variant="primary" size="sm" className="mt-3" onClick={runAll} disabled={busy !== ''}>{busy === 'runAll' ? 'Running…' : 'Run all resources'}</Button>
+            <Button variant="primary" size="sm" className="mt-3" onClick={runAll} loading={busy === 'runAll'}>{busy === 'runAll' ? 'Running…' : 'Run all resources'}</Button>
           </div>
         </div>
         <div className="bg-white rounded-2xl border border-slate-200/70 shadow-card p-5 flex items-start gap-4">
@@ -100,11 +100,11 @@ export default function Dashboard() {
           <div className="min-w-0 flex-1">
             <div className="font-semibold text-slate-900">Restart containers</div>
             <div className="text-xs text-slate-500 mt-1">Restart all running app containers (no rebuild) on every server. Control plane stays up — quick recovery if an app is stuck.</div>
-            <Button variant="secondary" size="sm" className="mt-3" onClick={restartAll} disabled={busy !== ''}>{busy === 'restart' ? 'Restarting…' : 'Restart containers'}</Button>
+            <Button variant="secondary" size="sm" className="mt-3" onClick={restartAll} loading={busy === 'restart'}>{busy === 'restart' ? 'Restarting…' : 'Restart containers'}</Button>
           </div>
         </div>
       </div>
-      {msg && <div className="text-xs text-slate-600 font-mono">{msg}</div>}
+      {false && <div className="text-xs text-slate-600 font-mono"></div>}
 
       <div>
         <div className="flex items-center gap-2 mb-3">
@@ -145,3 +145,4 @@ export default function Dashboard() {
     </div>
   )
 }
+

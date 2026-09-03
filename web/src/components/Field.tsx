@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react'
 import { useEffect, useState } from 'react'
 import { onLoadingChange } from '../loading'
+import { dismiss, subscribeToast } from '../toast'
 
 export const inputCls =
   'w-full border border-slate-200 rounded-lg px-3 py-2 text-sm bg-white text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-400 transition shadow-sm'
@@ -50,6 +51,32 @@ export function GlobalLoading() {
       <style>{`@keyframes loadingbar { 0%{background-position:200% 0} 100%{background-position:-200% 0} }`}</style>
     </div>
   )
+}
+
+/// Top-right toast notifications.
+export function Toasts() {
+  const [items, setItems] = useState<any[]>([])
+  useEffect(() => subscribeToast(setItems), [])
+  const tone: Record<string, string> = {
+    success: 'bg-emerald-50 border-emerald-200 text-emerald-800',
+    error: 'bg-red-50 border-red-200 text-red-700',
+    info: 'bg-sky-50 border-sky-200 text-sky-800',
+  }
+  return (
+    <div className="fixed top-12 right-4 z-[200] space-y-2 w-[340px] max-w-[90vw]">
+      {items.map(t => (
+        <div key={t.id} onClick={() => dismiss(t.id)}
+          className={`cursor-pointer rounded-xl border px-4 py-3 text-sm shadow-lg shadow-slate-900/5 animate-fade-up ${tone[t.type] || tone.info}`}>
+          {t.message}
+        </div>
+      ))}
+    </div>
+  )
+}
+
+/// Pulsing placeholder.
+export function Skeleton({ className = '' }: { className?: string }) {
+  return <div className={`rounded-lg bg-slate-200/70 animate-pulse ${className}`} />
 }
 
 type BadgeProps = { children: ReactNode; tone?: 'green' | 'amber' | 'blue' | 'red' | 'slate' | 'violet' | 'ok' | 'pending' }

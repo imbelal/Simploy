@@ -1,27 +1,27 @@
 import { useEffect, useState } from 'react'
 import { api } from '../api'
+import { toast } from '../toast'
 import { Badge, Button, Card, EmptyState, Field, PageHeader, Panel, inputCls } from '../components/Field'
 
 export default function Databases() {
   const [dbs, setDbs] = useState<any[]>([])
   const [servers, setServers] = useState<any[]>([])
   const [form, setForm] = useState({ name: '', type: 'postgres', version: '16', serverId: '', dataPath: '' })
-  const [msg, setMsg] = useState('')
+  const [busy, setBusy] = useState(false)
 
   const load = () => {
-    api.databases.list().then(setDbs).catch(e => setMsg(e.message))
+    api.databases.list().then(setDbs).catch(e => toast(e.message, 'error'))
     api.servers.list().then(setServers).catch(() => { })
   }
   useEffect(() => { load(); const i = setInterval(load, 3000); return () => clearInterval(i) }, [])
 
   const create = async () => {
-    if (!form.name || !form.serverId) return setMsg('Name and server are required')
-    await api.databases.create(form)
-    setMsg('Database created — provisioning…')
-    setForm({ ...form, name: '', version: form.type === 'postgres' ? '16' : form.type === 'mysql' ? '8' : '7' })
-    load()
+    if (!form.name || !form.serverId) return toast('Name and server are required', 'error')
+    setBusy(true)
+    try { await api.databases.create(form); toast('Database created — provisioning…'); setForm({ ...form, name: '', version: form.type === 'postgres' ? '16' : form.type === 'mysql' ? '8' : '7' }); load() }
+    catch (e: any) { toast(e.message, 'error') } finally { setBusy(false) }
   }
-  const del = async (id: string) => { if (!confirm('Delete this database (stops + removes volume)?')) return; await api.databases.del(id); setMsg('Database removed'); load() }
+  const del = async (id: string) => { if (!confirm('Delete this database (stops + removes volume)?')) return; try { await api.databases.del(id); toast('Database removed'); load() } catch (e: any) { toast(e.message, 'error') } }
 
   const connString = (d: any) => `host=db-${d.name}  port=${d.port}  db=${d.databaseName}  user=${d.username}  password=${d.password}`
 
@@ -58,8 +58,7 @@ export default function Databases() {
           </Field>
         </div>
         <div className="flex items-center gap-3 mt-4">
-          <Button variant="primary" onClick={create}>Create database</Button>
-          {msg && <div className="text-xs text-slate-500 font-mono">{msg}</div>}
+          <Button variant="primary" onClick={create} loading={busy}>Create database</Button>
         </div>
       </Panel>
 
