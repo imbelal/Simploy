@@ -59,11 +59,13 @@ export const api = {
   deployments: {
     list: (envId?: string) => req<any[]>(`/api/deployments${envId ? `?environmentId=${envId}` : ''}`),
     create: (b: any) => req<any>('/api/deployments', { method: 'POST', body: JSON.stringify(b) }),
+    runAll: () => req<any>('/api/deployments/run-all', { method: 'POST' }),
   },
   databases: {
     list: () => req<any[]>('/api/databases'),
     create: (b: any) => req<any>('/api/databases', { method: 'POST', body: JSON.stringify(b) }),
     del: (id: string) => req<any>(`/api/databases/${id}`, { method: 'DELETE' }),
+    runAll: () => req<any>('/api/databases/run-all', { method: 'POST' }),
   },
   backups: {
     get: () => req<any>('/api/settings/backups'),

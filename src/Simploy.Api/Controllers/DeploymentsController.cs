@@ -45,6 +45,22 @@ public class DeploymentsController(SimployDbContext db, DeploymentService deploy
         return d is null ? NotFound() : d.ToDto();
     }
 
+    [HttpPost("run-all")]
+    public async Task<IActionResult> RunAll(CancellationToken ct)
+    {
+        var envs = await db.Environments.Include(e => e.Project).ToListAsync(ct);
+        var queued = 0;
+        foreach (var env in envs)
+        {
+            var d = new Deployment { EnvironmentId = env.Id, ImageTag = env.ImageTag, Strategy = DeploymentStrategy.Recreate, Status = DeploymentStatus.Queued };
+            db.Deployments.Add(d);
+            queued++;
+            _ = deployer.EnqueueAsync(d.Id);
+        }
+        await db.SaveChangesAsync(ct);
+        return Ok(new { queued });
+    }
+
     [HttpPost("{id:guid}/rollback")]
     public async Task<IActionResult> Rollback(Guid id)
     {

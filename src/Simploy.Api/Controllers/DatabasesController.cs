@@ -55,6 +55,16 @@ public class DatabasesController(SimployDbContext db, DatabaseService dbService)
     public async Task<ActionResult<Database>> Get(Guid id) =>
         await db.Databases.Include(d => d.Server).FirstOrDefaultAsync(d => d.Id == id) is { } d ? d : NotFound();
 
+    /// <summary>Re-provisions every managed database (bring all running resources up).</summary>
+    [HttpPost("run-all")]
+    public async Task<IActionResult> RunAll(CancellationToken ct)
+    {
+        var dbs = await db.Databases.Where(x => x.Status != "Removed" && x.Status != "Failed").ToListAsync(ct);
+        foreach (var d in dbs) { d.Status = "Pending"; _ = dbService.EnqueueAsync(d.Id); }
+        await db.SaveChangesAsync(ct);
+        return Ok(new { queued = dbs.Count });
+    }
+
     [HttpDelete("{id:guid}")]
     public async Task<IActionResult> Delete(Guid id)
     {

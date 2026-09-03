@@ -121,6 +121,16 @@ export default function Deployments() {
     catch (e: any) { setMsg(e.message) }
   }
 
+  const runAll = async () => {
+    if (!confirm('Re-deploy every environment and re-provision every database? This rebuilds/runs all recorded resources.')) return
+    setMsg('Running all resources — this re-deploys every app + starts every database…')
+    try {
+      const [d, b] = await Promise.all([api.deployments.runAll(), api.databases.runAll()])
+      setMsg(`Queued ${d.queued} deployments + ${b.queued} databases`)
+      load()
+    } catch (e: any) { setMsg(e.message) }
+  }
+
   // Stream a container's logs (SSE-over-fetch).
   useEffect(() => {
     setCtrLog('')
@@ -155,7 +165,7 @@ export default function Deployments() {
 
   return (
     <div className="space-y-6">
-      <PageHeader title="Deployments" desc="Trigger a build and see how it runs. Recreate swaps the app; Canary keeps the previous version running and shifts traffic over gradually." />
+      <PageHeader title="Deployments" desc="Trigger a build and see how it runs. Recreate swaps the app; Canary keeps the previous version running and shifts traffic over gradually." action={<Button variant="secondary" onClick={runAll}>Run all resources</Button>} />
 
       <Panel>
         <div className="font-semibold text-slate-900 mb-4">Trigger a deploy</div>
