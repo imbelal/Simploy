@@ -1,5 +1,7 @@
 // Empty => relative /api/... (proxied by nginx in the web container, so it works
 // from any host with no CORS issues). Set VITE_API_URL only for local `npm run dev`.
+import { trackLoading, untrackLoading } from './loading'
+
 const API = import.meta.env.VITE_API_URL ?? ''
 const TOKEN_KEY = 'simploy.jwt'
 
@@ -16,17 +18,22 @@ export const auth = {
 
 async function req<T>(path: string, opts?: RequestInit, isLogin = false): Promise<T> {
   const token = localStorage.getItem(TOKEN_KEY)
-  const res = await fetch(`${API}${path}`, {
-    headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
-    ...opts,
-  })
-  if (res.status === 401 && !isLogin) {
-    localStorage.removeItem(TOKEN_KEY)
-    window.location.href = '/login'
-    throw new Error('Session expired')
+  trackLoading()
+  try {
+    const res = await fetch(`${API}${path}`, {
+      headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+      ...opts,
+    })
+    if (res.status === 401 && !isLogin) {
+      localStorage.removeItem(TOKEN_KEY)
+      window.location.href = '/login'
+      throw new Error('Session expired')
+    }
+    if (!res.ok) throw new Error(`${res.status} ${await res.text()}`)
+    return res.status === 204 ? null as T : res.json()
+  } finally {
+    untrackLoading()
   }
-  if (!res.ok) throw new Error(`${res.status} ${await res.text()}`)
-  return res.status === 204 ? null as T : res.json()
 }
 
 export const api = {

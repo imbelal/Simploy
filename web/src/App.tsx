@@ -1,5 +1,6 @@
 import { BrowserRouter, Routes, Route, NavLink, Navigate } from 'react-router-dom'
 import { useState } from 'react'
+import { GlobalLoading } from './components/Field'
 import { auth } from './api'
 import Dashboard from './pages/Dashboard'
 import Servers from './pages/Servers'
@@ -68,6 +69,7 @@ export default function App() {
   const [loggedIn, setLoggedIn] = useState(auth.isLoggedIn())
   return (
     <BrowserRouter>
+      <GlobalLoading />
       {!loggedIn ? (
         <Routes>
           <Route path="/login" element={<Login onLogin={() => setLoggedIn(true)} />} />
