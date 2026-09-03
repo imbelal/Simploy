@@ -600,6 +600,49 @@ public class DockerService(IConfiguration config, ILogger<DockerService> log)
 
     public Task EnsureProxyAsync(CancellationToken ct) => EnsureSharedProxyAsync(ct);
 
+    /// <summary>Lists TLS certificates currently stored by the shared Caddy proxy. Reads the
+    /// PEM files from the Caddy container's /data/caddy (its cert storage) so the UI can
+    /// surface days-to-expiry without touching the ACME issuer.</summary>
+    public async Task<List<object>> ListCertificatesAsync(CancellationToken ct)
+    {
+        var results = new List<object>();
+        if (GetContainerId(ProxyCaddy, ct) is null) return results;
+
+        // Enumerate every .crt under /data/caddy/certificates recursively.
+        var find = await RunStdoutOnlyAsync("docker",
+            $"exec {ProxyCaddy} sh -c \"find /data/caddy/certificates -type f -name '*.crt' 2>/dev/null\"", ct);
+        if (string.IsNullOrWhiteSpace(find)) return results;
+
+        foreach (var crt in find.Split('\n', StringSplitOptions.RemoveEmptyEntries).Select(f => f.Trim()))
+        {
+            try
+            {
+                var pem = await RunStdoutOnlyAsync("docker", $"exec {ProxyCaddy} cat \"{crt}\"", ct);
+                using var x = System.Security.Cryptography.X509Certificates.X509Certificate2.CreateFromPem(pem);
+                results.Add(new
+                {
+                    domain = Path.GetFileNameWithoutExtension(crt),
+                    notAfter = x.NotAfter,
+                    daysLeft = (int)(x.NotAfter - DateTime.UtcNow).TotalDays,
+                    issuer = x.Issuer,
+                });
+            }
+            catch { /* skip unreadable cert */ }
+        }
+        return results;
+    }
+
+    private string? GetContainerId(string name, CancellationToken ct)
+    {
+        try
+        {
+            var id = RunStdoutOnlyAsync("docker", $"ps -q -f name={name}", ct).GetAwaiter().GetResult();
+            return string.IsNullOrWhiteSpace(id) ? null : id.Split('\n', StringSplitOptions.RemoveEmptyEntries).FirstOrDefault();
+        }
+        catch { return null; }
+    }
+
+
     /// <summary>Creates the shared proxy network, base Caddyfile and Caddy container so all
     /// Simploy-generated apps are routed by domain through one proxy.</summary>
     private async Task EnsureSharedProxyAsync(CancellationToken ct)

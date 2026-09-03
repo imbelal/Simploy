@@ -57,6 +57,20 @@ public class ServersController(SimployDbContext db, IConfiguration config) : Con
         return Content(body, "application/json");
     }
 
+    /// <summary>Lists TLS certificates held by the shared Caddy proxy on a server.</summary>
+    [HttpGet("{id:guid}/certificates")]
+    public async Task<IActionResult> Certificates(Guid id, CancellationToken ct)
+    {
+        var s = await db.Servers.FindAsync(id);
+        if (s is null) return NotFound();
+        using var http = new HttpClient { Timeout = TimeSpan.FromSeconds(15) };
+        var token = config["Agent:Token"] ?? "";
+        if (!string.IsNullOrEmpty(token))
+            http.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
+        var body = await http.GetStringAsync($"http://{s.Host}:8089/certificates", ct);
+        return Content(body, "application/json");
+    }
+
     /// <summary>Streams a container's logs (SSE pass-through from the agent).</summary>
     [HttpGet("{id:guid}/containers/{name}/logs")]
     public async Task StreamContainerLogs(Guid id, string name, string? tail, CancellationToken ct)

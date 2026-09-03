@@ -49,6 +49,7 @@ export const api = {
     check: (id: string) => req<any>(`/api/servers/${id}/check`, { method: 'POST' }),
     del: (id: string) => req<any>(`/api/servers/${id}`, { method: 'DELETE' }),
     containers: (id: string) => req<any[]>(`/api/servers/${id}/containers`),
+    certificates: (id: string) => req<any[]>(`/api/servers/${id}/certificates`),
     restartContainers: () => req<any>('/api/servers/containers/restart', { method: 'POST' }),
   },
   projects: {

@@ -19,9 +19,19 @@ export default function Servers() {
   const [form, setForm] = useState({ name: '', host: '', sshPort: 22, sshUser: 'root' })
   const [busy, setBusy] = useState(false)
   const [loaded, setLoaded] = useState(false)
+  const [certs, setCerts] = useState<{ serverId: string; host: string; list: any[] } | null>(null)
+  const [certsBusy, setCertsBusy] = useState<string | null>(null)
 
   const load = () => api.servers.list().then(s => { setServers(s); setLoaded(true) }).catch(e => toast(e.message, 'error'))
   useEffect(() => { load() }, [])
+
+  const certTone = (d: number): string => d <= 7 ? 'text-red-600' : d <= 30 ? 'text-amber-600' : 'text-emerald-600'
+
+  const openCerts = async (id: string, host: string) => {
+    setCertsBusy(id)
+    try { const list = await api.servers.certificates(id); setCerts({ serverId: id, host, list }) }
+    catch (e: any) { toast(e.message, 'error') } finally { setCertsBusy(null) }
+  }
 
   const create = async () => {
     if (!form.name || !form.host) return toast('Name and Host are required', 'error')
@@ -77,11 +87,37 @@ export default function Servers() {
                 <td className="px-4 py-3"><ServerStatus status={s.status} /></td>
                 <td className="px-4 py-3 flex gap-2">
                   <Button size="sm" variant="secondary" onClick={() => check(s.id)}>Check :8089</Button>
+                  <Button size="sm" variant="secondary" loading={certsBusy === s.id} onClick={() => openCerts(s.id, s.host)}>Certs</Button>
                   <Button size="sm" variant="danger" onClick={() => del(s.id)}>Delete</Button>
                 </td>
               </tr>
             ))}
             {loaded && servers.length === 0 && <tr><td colSpan={4}><EmptyState title="No servers yet">Add one above, or run the one-liner install on your VM first.</EmptyState></td></tr>}
+            {certs && (
+              <tr className="border-t border-slate-100 bg-slate-50/50">
+                <td colSpan={4} className="px-5 py-4">
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="text-sm font-medium text-slate-700">TLS certificates on {certs.host}</div>
+                    <button className="text-xs text-slate-400 hover:text-slate-600" onClick={() => setCerts(null)}>Close</button>
+                  </div>
+                  <table className="w-full text-sm">
+                    <thead className="text-slate-400 text-xs"><tr><th className="text-left py-1 font-medium">Domain</th><th className="text-left py-1 font-medium">Issuer</th><th className="text-left py-1 font-medium">Expires</th><th className="text-left py-1 font-medium">Days left</th></tr></thead>
+                    <tbody>
+                      {certs.list.length === 0 ? (
+                        <tr><td className="py-2 text-xs text-slate-400" colSpan={4}>No certificates found (Caddy may still be obtaining them).</td></tr>
+                      ) : certs.list.map((c, i) => (
+                        <tr key={i} className="border-t border-slate-100">
+                          <td className="py-1.5 font-mono text-xs text-slate-700">{c.domain}</td>
+                          <td className="py-1.5 text-xs text-slate-500">{c.issuer}</td>
+                          <td className="py-1.5 text-xs text-slate-500">{new Date(c.notAfter).toLocaleString()}</td>
+                          <td className={`py-1.5 text-xs font-medium ${certTone(c.daysLeft)}`}>{c.daysLeft} days</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </td>
+              </tr>
+            )}
           </tbody>
         </table>
       </Card>
