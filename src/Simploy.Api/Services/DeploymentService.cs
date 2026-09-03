@@ -51,11 +51,10 @@ public class DeploymentService(IServiceProvider sp, IConfiguration config, GitHu
                     .FirstOrDefaultAsync(ct)
                 : null;
 
-            // If the project uses a GitHub App installation (and no PAT), mint a short-lived
-            // installation token to clone the repo with. Falls back to the PAT if set.
+            // Prefer the GitHub App (short-lived token) when a project is bound to one;
+            // fall back to the PAT only if no installation is bound.
             var gitToken = env.Project.GitToken;
-            if (string.IsNullOrEmpty(gitToken) && !string.IsNullOrEmpty(env.Project.GithubInstallationId)
-                && github.IsConfigured)
+            if (!string.IsNullOrEmpty(env.Project.GithubInstallationId) && github.IsConfigured)
             {
                 try { gitToken = await github.GetInstallationTokenAsync(env.Project.GithubInstallationId!, ct); }
                 catch (Exception ex) { throw new Exception($"GitHub App token: {ex.Message}", ex); }

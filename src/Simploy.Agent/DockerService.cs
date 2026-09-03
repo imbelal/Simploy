@@ -169,7 +169,8 @@ public class DockerService(IConfiguration config, ILogger<DockerService> log)
         var repo = req.GitRepository!.Trim();
         if (!repo.Contains("://")) repo = $"https://{repo}";
         var cloneUrl = repo;
-        if (!string.IsNullOrWhiteSpace(req.GitToken))
+        var hadToken = !string.IsNullOrWhiteSpace(req.GitToken);
+        if (hadToken)
         {
             // https://github.com/org/app -> https://x-access-token:<token>@github.com/org/app
             var uri = new Uri(cloneUrl);
@@ -186,7 +187,7 @@ public class DockerService(IConfiguration config, ILogger<DockerService> log)
             if (!refsExist)
             {
                 log.LogInformation("Cloning {Repo}", req.GitRepository);
-                await RunAsync("git", $"clone --depth 1 {cloneUrl} {sourceDir}", ct);
+                await CloneAsync(cloneUrl, repo, hadToken, sourceDir, ct);
             }
 
             // Try to move to the configured branch; if it doesn't exist (e.g. the repo
@@ -212,6 +213,23 @@ public class DockerService(IConfiguration config, ILogger<DockerService> log)
             throw Redact(ex, req.GitToken);
         }
     }
+
+    /// <summary>Clones, retrying without the token if GitHub rejects it (public repo / stale token).</summary>
+    private async Task CloneAsync(string tokenizedUrl, string repo, bool hadToken, string sourceDir, CancellationToken ct)
+    {
+        try { await RunAsync("git", $"clone --depth 1 {tokenizedUrl} {sourceDir}", ct); }
+        catch (Exception ex) when (hadToken && IsAuthRejected(ex.Message))
+        {
+            log.LogWarning("Git token rejected on {Repo}; retrying public clone", repo);
+            Directory.Delete(sourceDir, true);
+            await RunAsync("git", $"clone --depth 1 {repo} {sourceDir}", ct);
+        }
+    }
+
+    private static bool IsAuthRejected(string msg) =>
+        msg.Contains("Invalid username or token", StringComparison.OrdinalIgnoreCase)
+        || msg.Contains("Authentication failed", StringComparison.OrdinalIgnoreCase)
+        || msg.Contains("could not read Username", StringComparison.OrdinalIgnoreCase);
 
     /// <summary>Strips credentials from a command error before it is surfaced, so a PAT
     /// embedded in a clone URL is never written into the deployment log.</summary>
