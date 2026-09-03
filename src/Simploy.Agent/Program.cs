@@ -90,6 +90,9 @@ app.MapGet("/containers/{name}/logs", async (string name, string? tail, HttpCont
 app.MapGet("/certificates", async (DockerService docker, CancellationToken ct) =>
     Results.Ok(await docker.ListCertificatesAsync(ct)));
 
+app.MapGet("/metrics/containers", async (DockerService docker, CancellationToken ct) =>
+    Results.Ok(await docker.ListContainerMetricsAsync(ct)));
+
 app.MapPost("/system/containers/restart", async (DockerService docker, ILogger<Program> log, CancellationToken ct) =>
 {
     var names = await docker.RestartAppContainersAsync(ct);

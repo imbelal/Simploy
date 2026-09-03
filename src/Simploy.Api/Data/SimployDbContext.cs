@@ -12,6 +12,7 @@ public class SimployDbContext(DbContextOptions<SimployDbContext> options) : DbCo
     public DbSet<Simploy.Shared.Models.Environment> Environments => Set<Simploy.Shared.Models.Environment>();
     public DbSet<Domain> Domains => Set<Domain>();
     public DbSet<Deployment> Deployments => Set<Deployment>();
+    public DbSet<UptimeCheck> UptimeChecks => Set<UptimeCheck>();
 
     protected override void OnModelCreating(ModelBuilder b)
     {

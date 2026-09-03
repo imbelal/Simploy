@@ -638,6 +638,41 @@ public class DockerService(IConfiguration config, ILogger<DockerService> log)
         return results;
     }
 
+    /// <summary>Live per-container CPU/memory snapshot from docker stats.</summary>
+    public async Task<List<object>> ListContainerMetricsAsync(CancellationToken ct)
+    {
+        var metrics = new List<object>();
+        string raw;
+        try
+        {
+            raw = await RunStdoutOnlyAsync("docker",
+                "stats --no-stream --format \"{{json .}}\"", ct);
+        }
+        catch { return metrics; } // docker unavailable or no containers
+        if (string.IsNullOrWhiteSpace(raw)) return metrics;
+
+        foreach (var line in raw.Split('\n', StringSplitOptions.RemoveEmptyEntries))
+        {
+            try
+            {
+                using var doc = System.Text.Json.JsonDocument.Parse(line);
+                var r = doc.RootElement;
+                var mem = (r.TryGetProperty("MemUsage", out var m) ? m.GetString() : "")!.Trim();
+                var memPerc = (r.TryGetProperty("MemPerc", out var mp) ? mp.GetString() : "")!.Trim();
+                metrics.Add(new
+                {
+                    name = (r.TryGetProperty("Name", out var n) ? n.GetString() : "")!.TrimStart('/'),
+                    cpuPerc = (r.TryGetProperty("CPUPerc", out var c) ? c.GetString() : "")!.Trim(),
+                    memUsage = mem,
+                    memPerc = memPerc,
+                    pids = (r.TryGetProperty("PIDs", out var p) ? p.GetInt64() : 0),
+                });
+            }
+            catch { /* skip malformed line */ }
+        }
+        return metrics;
+    }
+
     private string? GetContainerId(string name, CancellationToken ct)
     {
         try

@@ -8,6 +8,7 @@ type Step = { n: number; title: string; desc: string; to: string; cta: string; t
 
 export default function Dashboard() {
   const [stats, setStats] = useState({ servers: 0, projects: 0, envs: 0, deps: 0 })
+  const [uptime, setUptime] = useState<any[]>([])
   const [busy, setBusy] = useState('')
 
   useEffect(() => {
@@ -17,7 +18,10 @@ export default function Dashboard() {
       api.envs.list().catch(() => []),
       api.deployments.list().catch(() => []),
     ]).then(([s, p, e, d]) => setStats({ servers: s.length, projects: p.length, envs: e.length, deps: d.length }))
+    api.uptime.list().then(setUptime).catch(() => {})
   }, [])
+
+  const uptimeTone = (p: number) => p >= 99 ? 'text-emerald-600' : p >= 90 ? 'text-amber-600' : 'text-red-600'
 
   const runAll = async () => {
     if (!confirm('Re-deploy every environment and re-provision every database? This rebuilds/runs all your recorded resources.')) return
@@ -104,7 +108,6 @@ export default function Dashboard() {
           </div>
         </div>
       </div>
-      {false && <div className="text-xs text-slate-600 font-mono"></div>}
 
       <div>
         <div className="flex items-center gap-2 mb-3">
@@ -114,6 +117,40 @@ export default function Dashboard() {
           {steps.map((s, i) => <StepCard key={s.n} s={s} idx={i} />)}
         </div>
       </div>
+
+      <div>
+        <div className="flex items-center gap-2 mb-3">
+          <h2 className="font-semibold text-slate-900">Uptime</h2>
+          <span className="text-xs text-slate-400">probed every minute · last 100 checks · latency ms</span>
+        </div>
+        {uptime.length === 0 ? (
+          <div className="bg-white rounded-2xl border border-slate-200/70 shadow-card p-5 text-sm text-slate-500">
+            No monitored domains yet. Add a Domain to an Environment (or deploy with a custom domain) and it'll be tracked here.
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+            {uptime.map((u, i) => {
+              const ok = u.last?.ok
+              return (
+                <div key={i} className="bg-white rounded-2xl border border-slate-200/70 shadow-card p-5">
+                  <div className="flex items-center justify-between">
+                    <div className={`w-2.5 h-2.5 rounded-full shrink-0 ${ok ? 'bg-emerald-500' : 'bg-red-500'} animate-pulse`}></div>
+                    <div className={`text-xs font-semibold ${uptimeTone(u.upPct)}`}>{u.upPct}%</div>
+                  </div>
+                  <a href={u.url} target="_blank" rel="noreferrer" className="text-sm font-medium text-slate-900 mt-3 block truncate font-mono hover:text-indigo-600">{u.url.replace(/^https?:\/\//, '')}</a>
+                  <div className="text-xs text-slate-500 mt-2">
+                    <span className={ok ? 'text-emerald-600' : 'text-red-600'}>{ok ? 'Up' : 'Down'}</span>
+                    {' · '}{u.last?.statusCode ?? '—'} · {u.last?.latencyMs ?? 0}ms
+                    <span className="text-slate-300"> · checked {new Date(u.last?.checkedAt).toLocaleTimeString()}</span>
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        )}
+      </div>
+
+      {false && <div className="text-xs text-slate-600 font-mono"></div>}
 
       <Panel>
         <div className="flex items-start gap-3">

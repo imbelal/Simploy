@@ -21,6 +21,8 @@ export default function Servers() {
   const [loaded, setLoaded] = useState(false)
   const [certs, setCerts] = useState<{ serverId: string; host: string; list: any[] } | null>(null)
   const [certsBusy, setCertsBusy] = useState<string | null>(null)
+  const [metrics, setMetrics] = useState<{ serverId: string; host: string; list: any[] } | null>(null)
+  const [metricsBusy, setMetricsBusy] = useState<string | null>(null)
 
   const load = () => api.servers.list().then(s => { setServers(s); setLoaded(true) }).catch(e => toast(e.message, 'error'))
   useEffect(() => { load() }, [])
@@ -31,6 +33,12 @@ export default function Servers() {
     setCertsBusy(id)
     try { const list = await api.servers.certificates(id); setCerts({ serverId: id, host, list }) }
     catch (e: any) { toast(e.message, 'error') } finally { setCertsBusy(null) }
+  }
+
+  const openMetrics = async (id: string, host: string) => {
+    setMetricsBusy(id)
+    try { const list = await api.servers.metrics(id); setMetrics({ serverId: id, host, list }) }
+    catch (e: any) { toast(e.message, 'error') } finally { setMetricsBusy(null) }
   }
 
   const create = async () => {
@@ -88,11 +96,41 @@ export default function Servers() {
                 <td className="px-4 py-3 flex gap-2">
                   <Button size="sm" variant="secondary" onClick={() => check(s.id)}>Check :8089</Button>
                   <Button size="sm" variant="secondary" loading={certsBusy === s.id} onClick={() => openCerts(s.id, s.host)}>Certs</Button>
+                  <Button size="sm" variant="secondary" loading={metricsBusy === s.id} onClick={() => openMetrics(s.id, s.host)}>Metrics</Button>
                   <Button size="sm" variant="danger" onClick={() => del(s.id)}>Delete</Button>
                 </td>
               </tr>
             ))}
             {loaded && servers.length === 0 && <tr><td colSpan={4}><EmptyState title="No servers yet">Add one above, or run the one-liner install on your VM first.</EmptyState></td></tr>}
+            {metrics && (
+              <tr className="border-t border-slate-100 bg-slate-50/50">
+                <td colSpan={4} className="px-5 py-4">
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="text-sm font-medium text-slate-700">Container metrics on {metrics.host}</div>
+                    <div className="flex items-center gap-3">
+                      <button className="text-xs text-indigo-600 hover:underline" onClick={() => openMetrics(metrics.serverId, metrics.host)}>Refresh</button>
+                      <button className="text-xs text-slate-400 hover:text-slate-600" onClick={() => setMetrics(null)}>Close</button>
+                    </div>
+                  </div>
+                  <table className="w-full text-sm">
+                    <thead className="text-slate-400 text-xs"><tr><th className="text-left py-1 font-medium">Container</th><th className="text-right py-1 font-medium">CPU %</th><th className="text-right py-1 font-medium">Memory</th><th className="text-right py-1 font-medium">Mem %</th><th className="text-right py-1 font-medium">PIDs</th></tr></thead>
+                    <tbody>
+                      {metrics.list.length === 0 ? (
+                        <tr><td className="py-2 text-xs text-slate-400" colSpan={5}>No containers reporting metrics.</td></tr>
+                      ) : metrics.list.map((c, i) => (
+                        <tr key={i} className="border-t border-slate-100">
+                          <td className="py-1.5 font-mono text-xs text-slate-700">{c.name}</td>
+                          <td className="py-1.5 text-right text-xs text-slate-600">{c.cpuPerc}</td>
+                          <td className="py-1.5 text-right text-xs text-slate-600">{c.memUsage}</td>
+                          <td className="py-1.5 text-right text-xs text-slate-600">{c.memPerc}</td>
+                          <td className="py-1.5 text-right text-xs text-slate-600">{c.pids}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </td>
+              </tr>
+            )}
             {certs && (
               <tr className="border-t border-slate-100 bg-slate-50/50">
                 <td colSpan={4} className="px-5 py-4">

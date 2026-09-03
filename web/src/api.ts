@@ -50,6 +50,7 @@ export const api = {
     del: (id: string) => req<any>(`/api/servers/${id}`, { method: 'DELETE' }),
     containers: (id: string) => req<any[]>(`/api/servers/${id}/containers`),
     certificates: (id: string) => req<any[]>(`/api/servers/${id}/certificates`),
+    metrics: (id: string) => req<any[]>(`/api/servers/${id}/metrics`),
     restartContainers: () => req<any>('/api/servers/containers/restart', { method: 'POST' }),
   },
   projects: {
@@ -84,5 +85,8 @@ export const api = {
     run: () => req<any>('/api/settings/backups/run', { method: 'POST' }),
     list: () => req<any[]>('/api/settings/backups/list'),
     restore: (file: string) => req<any>('/api/settings/backups/restore', { method: 'POST', body: JSON.stringify({ file }) }),
+  },
+  uptime: {
+    list: () => req<any[]>('/api/uptime'),
   },
 };

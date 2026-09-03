@@ -34,6 +34,7 @@ builder.Services.AddHostedService<DeploymentWorker>();
 builder.Services.AddHostedService<DeploymentPoller>();
 builder.Services.AddHostedService<DatabaseWorker>();
 builder.Services.AddHostedService<BackupWorker>();
+builder.Services.AddHostedService<UptimeWorker>();
 
 // ---- JWT auth (single admin user from config) ----
 var jwtSecret = builder.Configuration["Auth:JwtSecret"] ?? "simploy-dev-secret-change-me";
@@ -86,6 +87,18 @@ using (var scope = app.Services.CreateScope())
             CREATE UNIQUE INDEX IF NOT EXISTS "IX_Databases_ServerId_Name" ON "Databases"("ServerId", "Name");
             """);
         db.Database.ExecuteSqlRaw("ALTER TABLE \"Databases\" ADD COLUMN IF NOT EXISTS \"DataPath\" text NULL;");
+        db.Database.ExecuteSqlRaw("""
+            CREATE TABLE IF NOT EXISTS "UptimeChecks" (
+                "Id" uuid NOT NULL PRIMARY KEY,
+                "EnvironmentId" uuid NOT NULL,
+                "Url" text NOT NULL,
+                "Ok" boolean NOT NULL,
+                "StatusCode" integer NULL,
+                "LatencyMs" integer NOT NULL,
+                "CheckedAt" timestamptz NOT NULL
+            );
+            CREATE INDEX IF NOT EXISTS "IX_UptimeChecks_EnvironmentId" ON "UptimeChecks"("EnvironmentId");
+            """);
         db.Database.ExecuteSqlRaw("""
             CREATE TABLE IF NOT EXISTS "BackupSettings" (
                 "Id" uuid NOT NULL PRIMARY KEY,
