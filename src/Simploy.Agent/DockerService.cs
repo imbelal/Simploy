@@ -605,6 +605,21 @@ public class DockerService(IConfiguration config, ILogger<DockerService> log)
             sb.AppendLine();
         }
         var file = Path.Combine(ProxyAppsDir, $"{ComposeRenderer.Sanitize(req.ProjectSlug)}-{ComposeRenderer.Sanitize(req.Slot)}.conf");
+
+        // Dedupe: remove any OTHER fragment that also claims one of this app's domains, so
+        // overlapping domains never produce an ambiguous site (which breaks the whole proxy).
+        var myDomains = (req.Domains ?? new()).Select(d => d.Host.ToLowerInvariant()).ToHashSet();
+        foreach (var other in Directory.GetFiles(ProxyAppsDir, "*.conf"))
+        {
+            if (string.Equals(other, file, StringComparison.OrdinalIgnoreCase)) continue;
+            var content = File.ReadAllText(other);
+            if (myDomains.Any(d => content.Contains(d, StringComparison.OrdinalIgnoreCase)))
+            {
+                log.LogInformation("Removing overlapping fragment {Other}", other);
+                File.Delete(other);
+            }
+        }
+
         await File.WriteAllTextAsync(file, sb.ToString(), ct);
         log.LogInformation("Wrote proxy fragment {File}", file);
     }
