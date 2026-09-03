@@ -62,6 +62,8 @@ services:
     volumes:
       - /opt/simploy/.proxy/Caddyfile:/etc/caddy/Caddyfile
       - /opt/simploy/.proxy/apps:/etc/caddy/apps
+      - simploy-caddy-data:/data
+      - simploy-caddy-config:/config
 
   # Agent — runs on the same VM as the control plane (Option A). Built from source,
   # uses the host network + docker socket so it can deploy apps and run backups.
@@ -81,6 +83,8 @@ services:
 
 volumes:
   pgdata:
+  simploy-caddy-data:
+  simploy-caddy-config:
 
 networks:
   simploy-proxy:
