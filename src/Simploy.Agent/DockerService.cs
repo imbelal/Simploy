@@ -802,7 +802,8 @@ public class DockerService(IConfiguration config, ILogger<DockerService> log)
     public async Task<IList<ContainerListResponse>> ListContainersAsync()
     {
         using var client = Client;
-        return await client.Containers.ListContainersAsync(new ContainersListParameters { All = true });
+        // Only running containers, not stopped/removed leftovers.
+        return await client.Containers.ListContainersAsync(new ContainersListParameters { All = false });
     }
 
     /// <summary>Streams a container's logs line-by-line (SSE) until the client disconnects.</summary>
