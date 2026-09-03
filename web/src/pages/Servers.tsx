@@ -3,6 +3,66 @@ import { api } from '../api'
 import { toast } from '../toast'
 import { Badge, Button, Card, EmptyState, Field, PageHeader, Panel, Skeleton, inputCls } from '../components/Field'
 
+/// <summary>Modal that streams `docker logs -f` for a container via SSE.</summary>
+function ContainerLogsModal({ serverId, name, onClose }: { serverId: string; name: string; onClose: () => void }) {
+  const [log, setLog] = useState('')
+  const [err, setErr] = useState('')
+  const [tail, setTail] = useState(200)
+
+  useEffect(() => {
+    setLog(''); setErr('')
+    let cancelled = false
+    const token = localStorage.getItem('simploy.jwt')
+    const run = async () => {
+      try {
+        const resp = await fetch(`/api/servers/${serverId}/containers/${encodeURIComponent(name)}/logs?tail=${tail}`, {
+          headers: token ? { Authorization: `Bearer ${token}` } : {}
+        })
+        if (!resp.ok || !resp.body) { setErr(`HTTP ${resp.status}`); return }
+        const reader = resp.body.getReader(); const dec = new TextDecoder(); let buf = ''
+        while (!cancelled) {
+          const { done, value } = await reader.read()
+          if (done) break
+          buf += dec.decode(value, { stream: true })
+          let i
+          while ((i = buf.indexOf('\n\n')) !== -1) {
+            const block = buf.slice(0, i); buf = buf.slice(i + 2)
+            for (const ln of block.split('\n')) {
+              const m = ln.match(/^data:\s?(.*)$/)
+              if (m) setLog(prev => prev + m[1] + '\n')
+            }
+          }
+        }
+      } catch (e: any) { setErr(e?.message || 'stream failed') }
+    }
+    run()
+    return () => { cancelled = true }
+  }, [serverId, name, tail])
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-sm p-4">
+      <div className="bg-slate-900 rounded-2xl border border-white/10 shadow-deep w-full max-w-3xl overflow-hidden">
+        <div className="flex items-center justify-between px-4 py-2.5 border-b border-white/10 bg-white/5">
+          <div className="text-sm text-slate-200 font-medium">
+            Logs — <span className="font-mono">{name}</span>
+          </div>
+          <div className="flex items-center gap-3">
+            <label className="text-xs text-slate-400 flex items-center gap-1">
+              tail
+              <input type="number" min={10} max={10000} value={tail} onChange={e => setTail(Math.max(10, +e.target.value || 200))}
+                className="w-20 bg-white/5 text-slate-200 text-xs px-2 py-1 rounded border border-white/10" />
+            </label>
+            <button onClick={onClose} className="text-slate-400 hover:text-white text-xs">✕</button>
+          </div>
+        </div>
+        {err
+          ? <pre className="p-4 text-xs font-mono text-red-300">Error: {err}</pre>
+          : <pre className="p-4 text-xs font-mono text-slate-100 overflow-auto max-h-[60vh] whitespace-pre-wrap">{log || 'Streaming…'}</pre>}
+      </div>
+    </div>
+  )
+}
+
 function ServerStatus({ status }: { status: number | string }) {
   const m: Record<number | string, 'pending' | 'ok' | 'slate' | 'red'> = {
     0: 'pending', Pending: 'pending',
@@ -26,6 +86,7 @@ export default function Servers() {
   const [containers, setContainers] = useState<{ serverId: string; host: string; list: any[] } | null>(null)
   const [containersBusy, setContainersBusy] = useState<string | null>(null)
   const [containerActionBusy, setContainerActionBusy] = useState<string | null>(null)
+  const [logsFor, setLogsFor] = useState<{ serverId: string; name: string } | null>(null)
 
   const load = () => api.servers.list().then(s => { setServers(s); setLoaded(true) }).catch(e => toast(e.message, 'error'))
   useEffect(() => { load() }, [])
@@ -214,6 +275,7 @@ export default function Servers() {
                             <td className="py-1.5 text-xs text-slate-500">{c.project || '—'}</td>
                             <td className="py-1.5 text-right">
                               <div className="inline-flex gap-1">
+                                <button className="px-2 py-0.5 text-xs rounded bg-indigo-50 text-indigo-700 hover:bg-indigo-100" onClick={() => setLogsFor({ serverId: containers.serverId, name: c.name })}>Logs</button>
                                 {!running && <button className="px-2 py-0.5 text-xs rounded bg-emerald-50 text-emerald-700 hover:bg-emerald-100 disabled:opacity-50" disabled={isCp || containerActionBusy === key('start')} onClick={() => containerAction(containers.serverId, containers.host, c.name, 'start')}>Start</button>}
                                 {running && <button className="px-2 py-0.5 text-xs rounded bg-amber-50 text-amber-700 hover:bg-amber-100 disabled:opacity-50" disabled={isCp || containerActionBusy === key('stop')} onClick={() => containerAction(containers.serverId, containers.host, c.name, 'stop')}>Stop</button>}
                                 <button className="px-2 py-0.5 text-xs rounded bg-slate-100 text-slate-700 hover:bg-slate-200 disabled:opacity-50" disabled={isCp || containerActionBusy === key('restart')} onClick={() => containerAction(containers.serverId, containers.host, c.name, 'restart')}>Restart</button>
@@ -231,6 +293,7 @@ export default function Servers() {
           </tbody>
         </table>
       </Card>
+      {logsFor && <ContainerLogsModal serverId={logsFor.serverId} name={logsFor.name} onClose={() => setLogsFor(null)} />}
     </div>
   )
 }
