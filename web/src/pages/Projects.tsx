@@ -7,7 +7,7 @@ import { Badge, Button, Card, EmptyState, Field, PageHeader, Panel, inputCls } f
 export default function Projects() {
   const [projects, setProjects] = useState<any[]>([])
   const [servers, setServers] = useState<any[]>([])
-  const [form, setForm] = useState({ name: 'BdShopManager', slug: 'bdshopmanager', imageRepository: 'ghcr.io/imbelal/bdshopmanager', gitRepository: 'https://github.com/imbelal/BdShopManager', gitToken: '', registryUsername: '', registryPassword: '', dockerfilePath: 'src/WebApi/Dockerfile', dockerContext: '.', template: '' })
+  const [form, setForm] = useState({ name: '', slug: '', imageRepository: '', gitRepository: '', gitToken: '', registryUsername: '', registryPassword: '', dockerfilePath: 'Dockerfile', dockerContext: '.', template: '' })
   const [showPrivate, setShowPrivate] = useState(false)
   const [msg, setMsg] = useState('')
   const [envEdit, setEnvEdit] = useState<any>(null)
