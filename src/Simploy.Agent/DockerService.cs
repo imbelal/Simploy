@@ -390,9 +390,15 @@ public class DockerService(IConfiguration config, ILogger<DockerService> log)
     public async Task<string> RestoreBackupAsync(AgentBackupRequest req, CancellationToken ct)
     {
         var file = req.DestDir; // DestDir carries the file path here
+        // Fall back to the default backups dir if a bare filename was sent.
+        if (!Path.IsPathRooted(file)) file = Path.Combine(BaseDir, "backups", file);
         var sql = await File.ReadAllTextAsync(file, ct);
-        await RunAsync("docker",
-            $"exec -i {req.Container} psql -U {req.Username} -d {req.DatabaseName}", ct: ct, stdin: sql);
+
+        // Drop the public schema first so restoring over existing data doesn't error
+        // on "relation already exists".
+        await RunAsync("docker", $"exec -i {req.Container} psql -U {req.Username} -d {req.DatabaseName}",
+            ct: ct, stdin: "DROP SCHEMA public CASCADE; CREATE SCHEMA public;");
+        await RunAsync("docker", $"exec -i {req.Container} psql -U {req.Username} -d {req.DatabaseName}", ct: ct, stdin: sql);
         return $"restored from {file}";
     }
 
