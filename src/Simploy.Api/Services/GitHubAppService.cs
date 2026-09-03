@@ -73,6 +73,54 @@ public class GitHubAppService(IConfiguration cfg)
         return json.GetProperty("token").GetString()!;
     }
 
+    /// <summary>Detects the build setup from a repo's file tree: the Dockerfile path, whether
+    /// it uses a compose file, and a suggested template when there's no Dockerfile.</summary>
+    public async Task<(string? dockerfilePath, string? template, bool usesCompose)> DetectProjectAsync(string ownerRepo, string? installationId, CancellationToken ct = default)
+    {
+        var url = $"https://api.github.com/repos/{ownerRepo}";
+        using var http = new HttpClient { Timeout = TimeSpan.FromSeconds(20) };
+        http.DefaultRequestHeaders.UserAgent.ParseAdd("simploy");
+        http.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/vnd.github+json"));
+        if (!string.IsNullOrEmpty(installationId) && IsConfigured)
+            http.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", await GetInstallationTokenAsync(installationId, ct));
+
+        var repoJson = await http.GetFromJsonAsync<JsonElement>(url, ct);
+        var branch = repoJson.TryGetProperty("default_branch", out var db) ? db.GetString() ?? "main" : "main";
+
+        List<string> paths = new();
+        try
+        {
+            // Recursive tree = all file paths in one call.
+            var tree = await http.GetFromJsonAsync<JsonElement>($"{url}/git/trees/{Uri.EscapeDataString(branch)}?recursive=1", ct);
+            foreach (var item in tree.GetProperty("tree").EnumerateArray())
+                if (item.TryGetProperty("path", out var p) && item.TryGetProperty("type", out var ty)
+                    && ty.GetString() == "blob")
+                    paths.Add(p.GetString()!);
+        }
+        catch { }
+
+        // Dockerfile: prefer root, else shortest path ending in 'Dockerfile'.
+        string? dockerfilePath = null;
+        if (paths.Count > 0)
+        {
+            var dfs = paths.Where(p => System.IO.Path.GetFileName(p) == "Dockerfile").OrderBy(p => p == "Dockerfile" ? 0 : p.Length).ToList();
+            if (dfs.Count > 0) dockerfilePath = dfs[0];
+        }
+
+        bool usesCompose = paths.Any(p => p is "docker-compose.yml" or "docker-compose.yaml" or "compose.yml" or "compose.yaml" || p.EndsWith("docker-compose.yml", StringComparison.Ordinal) || p.EndsWith("compose.yml", StringComparison.Ordinal));
+        bool hasPackage = paths.Count > 0 && (paths.Contains("package.json") || paths.Any(p => p == "package.json"));
+        bool hasRequirements = paths.Any(p => p == "requirements.txt" || p.EndsWith("/requirements.txt"));
+
+        string? template = null;
+        if (dockerfilePath is null)
+        {
+            if (hasRequirements) template = "django";
+            else if (hasPackage) template = "static";
+        }
+
+        return (dockerfilePath, template, usesCompose);
+    }
+
     /// <summary>Lists branches + default branch for a repo. Uses the installation token for
     /// private repos, or the public API (no auth) for public ones.</summary>
     public async Task<(List<string> branches, string defaultBranch)> GetBranchesAsync(string ownerRepo, string? installationId, CancellationToken ct = default)

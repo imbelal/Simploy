@@ -141,11 +141,17 @@ export default function Projects() {
     if (!id) return
     try { setGhRepos(await api.github.repositories(id)) } catch (e: any) { setMsg(e.message) }
   }
-  const importRepo = (fullName: string) => {
+  const importRepo = async (fullName: string) => {
     const name = fullName.split('/')[1] || fullName
     const slug = name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')
     setForm(f => ({ ...f, name, slug, imageRepository: f.imageRepository || slug, gitRepository: `https://github.com/${fullName}` }))
-    setMsg(`Imported ${fullName} — set the Dockerfile/context (or it'll auto-detect static)`)
+    // Auto-detect the Dockerfile / template from the repo.
+    try {
+      const d = await api.projects.detect(fullName, ghInstall)
+      if (d?.dockerfilePath || d?.usesCompose) setForm(f => ({ ...f, dockerfilePath: d.dockerfilePath ?? f.dockerfilePath, template: f.template || (d.template ?? '') }))
+      else setForm(f => ({ ...f, template: f.template || d.template || '' }))
+      toast(d?.dockerfilePath ? `Imported ${fullName} — found Dockerfile ${d.dockerfilePath}` : d?.usesCompose ? `Imported ${fullName} — uses docker-compose` : `Imported ${fullName} — no Dockerfile, picked ${d?.template ?? 'static'}`)
+    } catch { toast(`Imported ${fullName}`) }
   }
 
   const [ghProject, setGhProject] = useState<any>(null)

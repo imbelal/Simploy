@@ -38,6 +38,18 @@ public class GitHubController(SimployDbContext db, GitHubAppService github) : Co
         return Ok(await github.ListRepositoriesAsync(installationId, ct));
     }
 
+    /// <summary>Detects the Dockerfile path / template for a repo (used to prefill the form at import time).</summary>
+    [HttpGet("detect")]
+    public async Task<IActionResult> Detect([FromQuery] string repo, [FromQuery] string? installationId, CancellationToken ct)
+    {
+        try
+        {
+            var (df, template, compose) = await github.DetectProjectAsync(repo.Trim('/'), installationId, ct);
+            return Ok(new { dockerfilePath = df, template, usesCompose = compose });
+        }
+        catch (Exception ex) { return BadRequest(new { error = ex.Message }); }
+    }
+
     /// <summary>Lists the branches + default branch for a project's repo (for the env modal).</summary>
     [HttpGet("projects/{projectId:guid}/branches")]
     public async Task<IActionResult> Branches(Guid projectId, CancellationToken ct)
