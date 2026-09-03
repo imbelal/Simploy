@@ -17,7 +17,7 @@ public class EnvironmentsController(SimployDbContext db) : ControllerBase
     [HttpPost]
     public async Task<ActionResult<Shared.Models.Environment>> Create(CreateEnvironmentRequest req)
     {
-        var e = new Shared.Models.Environment { ProjectId = req.ProjectId, ServerId = req.ServerId, Name = req.Name, Slot = req.Slot, ImageTag = req.ImageTag };
+        var e = new Shared.Models.Environment { ProjectId = req.ProjectId, ServerId = req.ServerId, Name = req.Name, Slot = req.Slot, ImageTag = req.ImageTag, Branch = string.IsNullOrWhiteSpace(req.Branch) ? "main" : req.Branch };
         db.Environments.Add(e);
         await db.SaveChangesAsync();
         return CreatedAtAction(nameof(Get), new { id = e.Id }, e);

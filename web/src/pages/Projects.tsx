@@ -18,7 +18,7 @@ export default function Projects() {
     setEnvEdit(e)
     setEnvText(Object.entries(e.envVars || {}).map(([k, v]) => `${k}=${v}`).join('\n'))
   }
-  const saveEnv = async () => {
+  const saveEnvVars = async () => {
     if (!envEdit) return
     const vars: Record<string, string> = {}
     for (const line of envText.split('\n')) {
@@ -89,12 +89,19 @@ export default function Projects() {
     setMsg('Environment deleted')
     load()
   }
-  const createEnv = async (projectId: string) => {
+  const [envModal, setEnvModal] = useState<any>(null)
+  const [envForm, setEnvForm] = useState({ name: 'production', serverId: '', slot: 'prod', branch: 'main', imageTag: 'prod' })
+  const openEnvModal = (projectId: string) => {
     if (servers.length === 0) return setMsg('Add a server in Servers first')
-    const name = prompt('Environment name: production or staging', 'production') || 'production'
-    const serverId = servers.length === 1 ? servers[0].id : prompt(`Pick server id from:\n${servers.map(s => `${s.name}=${s.id.slice(0, 8)} (${s.host})`).join('\n')}`, servers[0].id) || servers[0].id
-    const slot = name === 'production' ? 'prod' : 'staging'
-    await api.envs.create({ projectId, serverId, name, slot, imageTag: slot })
+    setEnvModal(projectId)
+    setEnvForm({ name: 'production', serverId: servers[0].id, slot: 'prod', branch: 'main', imageTag: 'prod' })
+  }
+  const createEnvironment = async () => {
+    if (!envModal) return
+    const name = envForm.name.trim() || 'production'
+    const slot = envForm.slot.trim() || (name === 'production' ? 'prod' : 'staging')
+    await api.envs.create({ projectId: envModal, serverId: envForm.serverId, name, slot, imageTag: envForm.imageTag || slot })
+    setEnvModal(null)
     setMsg(`Environment ${name} added on ${slot}`)
     load()
   }
@@ -213,7 +220,7 @@ export default function Projects() {
             <span className="font-mono text-[11px] bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded">{p.slug}</span>
             <span className="font-mono text-[11px] text-slate-500">{p.imageRepository}</span>
           </span>}
-          action={<div className="flex gap-2 shrink-0"><Button size="sm" onClick={() => createEnv(p.id)}>+ Environment</Button><Button size="sm" variant="danger" onClick={() => delProject(p.id)}>Delete</Button></div>}
+          action={<div className="flex gap-2 shrink-0"><Button size="sm" onClick={() => openEnvModal(p.id)}>+ Environment</Button><Button size="sm" variant="danger" onClick={() => delProject(p.id)}>Delete</Button></div>}
           >
             <div className="px-5 py-4">
               <div className="flex items-center gap-2 flex-wrap text-xs text-slate-500">
@@ -265,7 +272,7 @@ export default function Projects() {
             <textarea value={envText} onChange={e => setEnvText(e.target.value)} rows={10} className={inputCls + ' font-mono text-xs'} placeholder={'MSSQL_SA_PASSWORD=YourStr0ngPass!\nACCEPT_EULA=Y\n' + 'JWT_SECRET=...'} />
             <div className="flex justify-end gap-3 mt-4">
               <Button variant="secondary" onClick={() => setEnvEdit(null)}>Cancel</Button>
-              <Button variant="primary" onClick={saveEnv}>Save</Button>
+              <Button variant="primary" onClick={saveEnvVars}>Save</Button>
             </div>
           </div>
         </div>
@@ -296,6 +303,39 @@ export default function Projects() {
             <div className="flex justify-end gap-3 mt-4">
               <Button variant="secondary" onClick={() => setGhProject(null)}>Cancel</Button>
               <Button variant="primary" onClick={doGhBind} disabled={!ghChoice}>Bind</Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {envModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-sm p-4">
+          <div className="bg-white rounded-2xl shadow-deep w-full max-w-lg p-5">
+            <div className="font-semibold text-slate-900 mb-1">Add environment</div>
+            <div className="text-xs text-slate-500 mb-4">An environment links this app (project) to a server, with its own config + domains.</div>
+            <div className="grid grid-cols-2 gap-4">
+              <Field label="Name" hint="e.g. production / staging">
+                <input className={inputCls} value={envForm.name} onChange={e => setEnvForm({ ...envForm, name: e.target.value, slot: e.target.value === 'production' ? 'prod' : e.target.value === 'staging' ? 'staging' : envForm.slot })} />
+              </Field>
+              <Field label="Server" hint="Which VM to run this on.">
+                <select className={inputCls} value={envForm.serverId} onChange={e => setEnvForm({ ...envForm, serverId: e.target.value })}>
+                  <option value="">Select server…</option>
+                  {servers.map(s => <option key={s.id} value={s.id}>{s.name} ({s.host})</option>)}
+                </select>
+              </Field>
+              <Field label="Slot" hint="Compose project name; keeps stacks separate. e.g. prod">
+                <input className={inputCls} value={envForm.slot} onChange={e => setEnvForm({ ...envForm, slot: e.target.value })} />
+              </Field>
+              <Field label="Git branch" hint="Branch to build from.">
+                <input className={inputCls} value={envForm.branch} onChange={e => setEnvForm({ ...envForm, branch: e.target.value })} />
+              </Field>
+              <Field label="Image tag" hint="Tag for built images.">
+                <input className={inputCls} value={envForm.imageTag} onChange={e => setEnvForm({ ...envForm, imageTag: e.target.value })} />
+              </Field>
+            </div>
+            <div className="flex justify-end gap-3 mt-4">
+              <Button variant="secondary" onClick={() => setEnvModal(null)}>Cancel</Button>
+              <Button variant="primary" onClick={createEnvironment} disabled={!envForm.serverId}>Add environment</Button>
             </div>
           </div>
         </div>
