@@ -101,6 +101,15 @@ public class DockerService(IConfiguration config, ILogger<DockerService> log)
         else
         {
             composeContent = await File.ReadAllTextAsync(composeFile, ct);
+            // Apps routed through the shared proxy bind no fixed host ports, so multiple
+            // environments can coexist on one VM. Strip 'ports:' mappings from the compose.
+            var stripped = ComposeRenderer.StripHostPorts(composeContent);
+            if (!string.Equals(stripped, composeContent, StringComparison.Ordinal))
+            {
+                log.LogInformation("Stripped host ports from {Compose} (app is routed via the shared proxy)", composeFile);
+                composeContent = stripped;
+                await File.WriteAllTextAsync(composeFile, composeContent, ct);
+            }
         }
 
         // ---- 4. Render Caddyfile for domain routing / weighted canary.
