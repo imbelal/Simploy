@@ -119,6 +119,27 @@ public class ServersController(SimployDbContext db, IConfiguration config) : Con
         await resp.Content.CopyToAsync(Response.Body, ct);
     }
 
+    /// <summary>Start/stop/restart/delete a single container on a server.</summary>
+    [HttpPost("{id:guid}/containers/{name}/{action}")]
+    public async Task<IActionResult> ContainerAction(Guid id, string name, string action, [FromQuery] bool force = false, CancellationToken ct = default)
+    {
+        if (action is not ("start" or "stop" or "restart" or "delete"))
+            return BadRequest(new { error = $"unknown action '{action}'" });
+        var s = await db.Servers.FindAsync(id);
+        if (s is null) return NotFound();
+        // Defence-in-depth: refuse control-plane names even if a request slips past the UI.
+        if (name.StartsWith("simploy-", StringComparison.Ordinal))
+            return BadRequest(new { error = "Refusing to manage a control-plane container" });
+        using var http = new HttpClient { Timeout = TimeSpan.FromSeconds(30) };
+        var token = config["Agent:Token"] ?? "";
+        if (!string.IsNullOrEmpty(token))
+            http.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
+        var qs = action == "delete" ? $"?force={force.ToString().ToLowerInvariant()}" : "";
+        var resp = await http.PostAsync($"http://{s.Host}:8089/containers/{Uri.EscapeDataString(name)}/{action}{qs}", null, ct);
+        var body = await resp.Content.ReadAsStringAsync(ct);
+        return StatusCode((int)resp.StatusCode, new { ok = resp.IsSuccessStatusCode, agent = body });
+    }
+
     /// <summary>Returns the agent one-liner installer: <c>curl .../api/servers/install | bash</c>.</summary>
     [HttpGet("install"), AllowAnonymous]
     public IActionResult InstallScript()

@@ -969,8 +969,9 @@ public class DockerService(IConfiguration config, ILogger<DockerService> log)
     public async Task<IList<ContainerListResponse>> ListContainersAsync()
     {
         using var client = Client;
-        // Only running containers, not stopped/removed leftovers.
-        return await client.Containers.ListContainersAsync(new ContainersListParameters { All = false });
+        // All=true: include stopped/exited containers so the UI can Start / Delete
+        // them. Only running containers makes them invisible the moment they stop.
+        return await client.Containers.ListContainersAsync(new ContainersListParameters { All = true });
     }
 
     /// <summary>Restarts all running app containers (skips the control-plane ones).</summary>
@@ -986,6 +987,19 @@ public class DockerService(IConfiguration config, ILogger<DockerService> log)
             result.Add(name);
         }
         return result;
+    }
+
+    /// <summary>Start/stop/restart a single container by name. Caller-side guard
+    /// must reject `simploy-*` names so this can stay simple.</summary>
+    public Task<string> ContainerActionAsync(string name, string action, CancellationToken ct)
+        => RunAsync("docker", $"{action} {name}", ct);
+
+    /// <summary>Removes a container by name. `force=true` sends SIGKILL first so
+    /// a stuck container goes down without an interactive prompt.</summary>
+    public async Task<string> DeleteContainerAsync(string name, bool force, CancellationToken ct)
+    {
+        var args = force ? $"rm -f {name}" : $"rm {name}";
+        return await RunAsync("docker", args, ct);
     }
 
     /// <summary>Streams a container's logs line-by-line (SSE) until the client disconnects.</summary>

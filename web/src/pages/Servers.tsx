@@ -23,6 +23,9 @@ export default function Servers() {
   const [certsBusy, setCertsBusy] = useState<string | null>(null)
   const [metrics, setMetrics] = useState<{ serverId: string; host: string; list: any[] } | null>(null)
   const [metricsBusy, setMetricsBusy] = useState<string | null>(null)
+  const [containers, setContainers] = useState<{ serverId: string; host: string; list: any[] } | null>(null)
+  const [containersBusy, setContainersBusy] = useState<string | null>(null)
+  const [containerActionBusy, setContainerActionBusy] = useState<string | null>(null)
 
   const load = () => api.servers.list().then(s => { setServers(s); setLoaded(true) }).catch(e => toast(e.message, 'error'))
   useEffect(() => { load() }, [])
@@ -39,6 +42,27 @@ export default function Servers() {
     setMetricsBusy(id)
     try { const list = await api.servers.metrics(id); setMetrics({ serverId: id, host, list }) }
     catch (e: any) { toast(e.message, 'error') } finally { setMetricsBusy(null) }
+  }
+
+  const openContainers = async (id: string, host: string) => {
+    setContainersBusy(id)
+    try { const list = await api.servers.containers(id); setContainers({ serverId: id, host, list }) }
+    catch (e: any) { toast(e.message, 'error') } finally { setContainersBusy(null) }
+  }
+
+  const containerAction = async (id: string, host: string, name: string, action: 'start'|'stop'|'restart'|'delete') => {
+    if (action === 'delete' && !confirm(`Delete container ${name}? Compose will recreate it on the next deploy.`)) return
+    const key = `${id}:${name}:${action}`
+    setContainerActionBusy(key)
+    try {
+      const r: any = await api.servers.containerAction(id, name, action)
+      toast(`${action} ${name}: ${r.ok ? 'ok' : 'failed'}`, r.ok ? 'success' : 'error')
+      // Refresh the list so state changes are visible.
+      const list = await api.servers.containers(id)
+      setContainers({ serverId: id, host, list })
+    }
+    catch (e: any) { toast(e.message, 'error') }
+    finally { setContainerActionBusy(null) }
   }
 
   const create = async () => {
@@ -97,6 +121,7 @@ export default function Servers() {
                   <Button size="sm" variant="secondary" onClick={() => check(s.id)}>Check :8089</Button>
                   <Button size="sm" variant="secondary" loading={certsBusy === s.id} onClick={() => openCerts(s.id, s.host)}>Certs</Button>
                   <Button size="sm" variant="secondary" loading={metricsBusy === s.id} onClick={() => openMetrics(s.id, s.host)}>Metrics</Button>
+                  <Button size="sm" variant="secondary" loading={containersBusy === s.id} onClick={() => openContainers(s.id, s.host)}>Containers</Button>
                   <Button size="sm" variant="danger" onClick={() => del(s.id)}>Delete</Button>
                 </td>
               </tr>
@@ -151,6 +176,53 @@ export default function Servers() {
                           <td className={`py-1.5 text-xs font-medium ${certTone(c.daysLeft)}`}>{c.daysLeft} days</td>
                         </tr>
                       ))}
+                    </tbody>
+                  </table>
+                </td>
+              </tr>
+            )}
+            {containers && (
+              <tr className="border-t border-slate-100 bg-slate-50/50">
+                <td colSpan={4} className="px-5 py-4">
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="text-sm font-medium text-slate-700">Containers on {containers.host}</div>
+                    <div className="flex items-center gap-3">
+                      <button className="text-xs text-indigo-600 hover:underline" onClick={() => openContainers(containers.serverId, containers.host)}>Refresh</button>
+                      <button className="text-xs text-slate-400 hover:text-slate-600" onClick={() => setContainers(null)}>Close</button>
+                    </div>
+                  </div>
+                  <table className="w-full text-sm">
+                    <thead className="text-slate-400 text-xs"><tr>
+                      <th className="text-left py-1 font-medium">Container</th>
+                      <th className="text-left py-1 font-medium">Image</th>
+                      <th className="text-left py-1 font-medium">State</th>
+                      <th className="text-left py-1 font-medium">Project</th>
+                      <th className="text-right py-1 font-medium">Actions</th>
+                    </tr></thead>
+                    <tbody>
+                      {containers.list.length === 0 ? (
+                        <tr><td className="py-2 text-xs text-slate-400" colSpan={5}>No containers running on this server.</td></tr>
+                      ) : containers.list.map((c: any, i: number) => {
+                        const isCp = (c.name || '').startsWith('simploy-')
+                        const running = c.state === 'running'
+                        const key = (a: string) => `${containers.serverId}:${c.name}:${a}`
+                        return (
+                          <tr key={i} className="border-t border-slate-100">
+                            <td className="py-1.5 font-mono text-xs text-slate-700">{c.name}</td>
+                            <td className="py-1.5 text-xs text-slate-500 truncate max-w-xs" title={c.image}>{c.image}</td>
+                            <td className="py-1.5 text-xs"><span className={running ? 'text-emerald-600' : 'text-slate-400'}>{c.state}</span></td>
+                            <td className="py-1.5 text-xs text-slate-500">{c.project || '—'}</td>
+                            <td className="py-1.5 text-right">
+                              <div className="inline-flex gap-1">
+                                {!running && <button className="px-2 py-0.5 text-xs rounded bg-emerald-50 text-emerald-700 hover:bg-emerald-100 disabled:opacity-50" disabled={isCp || containerActionBusy === key('start')} onClick={() => containerAction(containers.serverId, containers.host, c.name, 'start')}>Start</button>}
+                                {running && <button className="px-2 py-0.5 text-xs rounded bg-amber-50 text-amber-700 hover:bg-amber-100 disabled:opacity-50" disabled={isCp || containerActionBusy === key('stop')} onClick={() => containerAction(containers.serverId, containers.host, c.name, 'stop')}>Stop</button>}
+                                <button className="px-2 py-0.5 text-xs rounded bg-slate-100 text-slate-700 hover:bg-slate-200 disabled:opacity-50" disabled={isCp || containerActionBusy === key('restart')} onClick={() => containerAction(containers.serverId, containers.host, c.name, 'restart')}>Restart</button>
+                                <button className="px-2 py-0.5 text-xs rounded bg-red-50 text-red-700 hover:bg-red-100 disabled:opacity-50" disabled={isCp || containerActionBusy === key('delete')} onClick={() => containerAction(containers.serverId, containers.host, c.name, 'delete')}>Delete</button>
+                              </div>
+                            </td>
+                          </tr>
+                        )
+                      })}
                     </tbody>
                   </table>
                 </td>

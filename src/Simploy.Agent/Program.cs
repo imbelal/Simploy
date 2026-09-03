@@ -100,6 +100,45 @@ app.MapPost("/system/containers/restart", async (DockerService docker, ILogger<P
     return Results.Ok(new { restarted = names.Count });
 });
 
+// Per-container management (start/stop/restart/delete a single container). Skips
+// the control-plane containers (name starts with `simploy-`) so a misclick can't
+// take down the API/agent/postgres/caddy.
+app.MapPost("/containers/{name}/stop", async (string name, DockerService docker, ILogger<Program> log, CancellationToken ct) =>
+{
+    if (name.StartsWith("simploy-", StringComparison.Ordinal))
+        return Results.Problem("Refusing to stop a control-plane container", statusCode: 400);
+    log.LogInformation("Stop container {Name}", name);
+    try { return Results.Ok(new { ok = true, output = await docker.ContainerActionAsync(name, "stop", ct) }); }
+    catch (Exception ex) { log.LogError(ex, "stop {Name} failed", name); return Results.Problem(ex.Message); }
+});
+
+app.MapPost("/containers/{name}/start", async (string name, DockerService docker, ILogger<Program> log, CancellationToken ct) =>
+{
+    log.LogInformation("Start container {Name}", name);
+    try { return Results.Ok(new { ok = true, output = await docker.ContainerActionAsync(name, "start", ct) }); }
+    catch (Exception ex) { log.LogError(ex, "start {Name} failed", name); return Results.Problem(ex.Message); }
+});
+
+app.MapPost("/containers/{name}/restart", async (string name, DockerService docker, ILogger<Program> log, CancellationToken ct) =>
+{
+    if (name.StartsWith("simploy-", StringComparison.Ordinal))
+        return Results.Problem("Refusing to restart a control-plane container", statusCode: 400);
+    log.LogInformation("Restart container {Name}", name);
+    try { return Results.Ok(new { ok = true, output = await docker.ContainerActionAsync(name, "restart", ct) }); }
+    catch (Exception ex) { log.LogError(ex, "restart {Name} failed", name); return Results.Problem(ex.Message); }
+});
+
+// `delete` forces the container down + removes it. The compose project can
+// recreate it on the next deploy, but data in named volumes is preserved.
+app.MapPost("/containers/{name}/delete", async (string name, bool force, DockerService docker, ILogger<Program> log, CancellationToken ct) =>
+{
+    if (name.StartsWith("simploy-", StringComparison.Ordinal))
+        return Results.Problem("Refusing to delete a control-plane container", statusCode: 400);
+    log.LogInformation("Delete container {Name} (force={Force})", name, force);
+    try { return Results.Ok(new { ok = true, output = await docker.DeleteContainerAsync(name, force, ct) }); }
+    catch (Exception ex) { log.LogError(ex, "delete {Name} failed", name); return Results.Problem(ex.Message); }
+});
+
 // Managed database provisioning
 app.MapPost("/db/deploy", async (AgentDbRequest req, DockerService docker, ILogger<Program> log, CancellationToken ct) =>
 {

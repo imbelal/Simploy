@@ -51,6 +51,7 @@ export const api = {
     containers: (id: string) => req<any[]>(`/api/servers/${id}/containers`),
     certificates: (id: string) => req<any[]>(`/api/servers/${id}/certificates`),
     metrics: (id: string) => req<any[]>(`/api/servers/${id}/metrics`),
+    containerAction: (id: string, name: string, action: 'start'|'stop'|'restart'|'delete', force = false) => req<any>(`/api/servers/${id}/containers/${encodeURIComponent(name)}/${action}${force ? '?force=true' : ''}`, { method: 'POST' }),
     restartContainers: () => req<any>('/api/servers/containers/restart', { method: 'POST' }),
   },
   projects: {
