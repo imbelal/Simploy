@@ -2,6 +2,7 @@ using System.Text;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
+using Npgsql;
 using Simploy.Api.Data;
 using Simploy.Api.Services;
 
@@ -61,6 +62,12 @@ if (app.Environment.IsDevelopment())
 using (var scope = app.Services.CreateScope())
 {
     var db = scope.ServiceProvider.GetRequiredService<SimployDbContext>();
+    var log = scope.ServiceProvider.GetRequiredService<ILoggerFactory>().CreateLogger("Startup");
+
+    // Auto-repair: if the postgres role password has drifted from the connection string
+    // (28P01), reset it in place via the Agent's docker socket before ensuring the schema.
+    RepairPostgresAuth(db, builder.Configuration, log);
+
     db.Database.EnsureCreated();
     // EnsureCreated does not alter an existing database, so apply lightweight
     // additive schema changes here (idempotent, Postgres only).
@@ -132,3 +139,89 @@ if (Directory.Exists(webDist))
     app.UseStaticFiles(new StaticFileOptions { FileProvider = new Microsoft.Extensions.FileProviders.PhysicalFileProvider(Path.GetFullPath(webDist)), RequestPath = "" });
 
 app.Run();
+
+// If the postgres role password has drifted from the connection string, the first
+// connection fails with 28P01. Ask the Agent (which has the docker socket) to reset
+// the role password in-place, then let EnsureCreated/migrations retry.
+static void RepairPostgresAuth(SimployDbContext db, IConfiguration config, ILogger log)
+{
+    var conn = db.Database.GetDbConnection();
+    try
+    {
+        conn.Open();
+        conn.Close();
+        return; // already connects — nothing to do
+    }
+    catch (Npgsql.PostgresException ex) when (ex.SqlState == "28P01")
+    {
+        log.LogWarning("Postgres password auth failed (28P01) — repairing postgres role password in place (no data loss)");
+    }
+    catch (Exception ex)
+    {
+        log.LogError(ex, "Could not verify postgres connection at startup");
+        return; // network/other issue — don't try to repair
+    }
+
+    var password = ParsePassword(config.GetConnectionString("Default"));
+    var user = ParseUsername(config.GetConnectionString("Default")) ?? "postgres";
+    // Try several candidate URLs: explicit config, then Docker DNS names that
+    // work on Linux without `host.docker.internal` (which only resolves on
+    // Docker Desktop). Fail loud so password drift is visible in the logs.
+    var candidates = (config["Agent:BaseUrl"] is { Length: > 0 } explicit
+        ? new[] { explicit }
+        : new[] { "http://simploy-agent:8089", "http://agent:8089", $"http://host.docker.internal:8089" });
+    var token = config["Agent:Token"] ?? "";
+    using var http = new HttpClient { Timeout = TimeSpan.FromSeconds(5) };
+    if (!string.IsNullOrEmpty(token))
+        http.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
+    Exception? last = null;
+    foreach (var agentBase in candidates)
+    {
+        try
+        {
+            log.LogInformation("Attempting postgres password repair via {Url} (user={User})", agentBase, user);
+            var resp = http.PostAsJsonAsync($"{agentBase}/system/db/fix-password",
+                new Simploy.Shared.Contracts.AgentFixPasswordRequest(null, user, password)).GetAwaiter().GetResult();
+            var body = resp.Content.ReadAsStringAsync().GetAwaiter().GetResult();
+            if (resp.IsSuccessStatusCode)
+            {
+                log.LogInformation("Postgres password repaired via agent at {Url}: {Body}", agentBase, body);
+                last = null;
+                break;
+            }
+            log.LogError("Agent repair at {Url} returned {Status}: {Body}", agentBase, (int)resp.StatusCode, body);
+            last = new Exception($"agent {agentBase} returned {(int)resp.StatusCode}: {body}");
+        }
+        catch (Exception ex)
+        {
+            log.LogWarning(ex, "Could not reach agent at {Url} to repair postgres password", agentBase);
+            last = ex;
+        }
+    }
+    if (last is not null)
+        log.LogError(last, "All candidate agent URLs failed; postgres password may still be drifted from connection string '{Password}'", password);
+}
+
+static string ParsePassword(string? cs)
+{
+    cs ??= "";
+    foreach (var p in cs.Split(';'))
+    {
+        var kv = p.Split('=', 2);
+        if (kv.Length == 2 && kv[0].Trim().Equals("Password", StringComparison.OrdinalIgnoreCase))
+            return kv[1].Trim();
+    }
+    return "postgres";
+}
+
+static string? ParseUsername(string? cs)
+{
+    cs ??= "";
+    foreach (var p in cs.Split(';'))
+    {
+        var kv = p.Split('=', 2);
+        if (kv.Length == 2 && kv[0].Trim().Equals("Username", StringComparison.OrdinalIgnoreCase))
+            return kv[1].Trim();
+    }
+    return null;
+}
