@@ -59,8 +59,8 @@ public class BackupService(IConfiguration config)
         var parts = cs.Split(';').Select(p => p.Split('=', 2)).Where(a => a.Length == 2)
             .ToDictionary(a => a[0].Trim(), a => a[1].Trim(), StringComparer.OrdinalIgnoreCase);
         return (parts.GetValueOrDefault("Database") ?? "simploy",
-                parts.GetValueOrDefault("Username") ?? "postgres",
-                parts.GetValueOrDefault("Password") ?? "postgres");
+                parts.GetValueOrDefault("Username") ?? throw new InvalidOperationException("ConnectionStrings__Default missing Username"),
+                parts.GetValueOrDefault("Password") ?? throw new InvalidOperationException("ConnectionStrings__Default missing Password"));
     }
 }
 

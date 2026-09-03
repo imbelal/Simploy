@@ -2,9 +2,9 @@ services:
   postgres:
     image: postgres:16-alpine
     environment:
-      POSTGRES_DB: simploy
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: ${POSTGRES_DB:-simploy}
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
     ports: ["5432:5432"]
     volumes: [pgdata:/var/lib/postgresql/data]
     healthcheck:
@@ -20,7 +20,7 @@ services:
       - "host.docker.internal:host-gateway"
     environment:
       ASPNETCORE_ENVIRONMENT: Production
-      ConnectionStrings__Default: "Host=postgres;Port=5432;Database=simploy;Username=postgres;Password=postgres"
+      ConnectionStrings__Default: "Host=postgres;Port=5432;Database=${POSTGRES_DB:-simploy};Username=${POSTGRES_USER:-postgres};Password=${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}"
       UseInMemoryDb: "false"
       # Auth — set these (esp. on a public server) via a .env file or your shell.
       Auth__JwtSecret: "${SIMPLOY_JWT_SECRET:-simploy-dev-jwt-secret-change-me-please-32chars}"
