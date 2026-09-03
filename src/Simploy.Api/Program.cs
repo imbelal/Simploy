@@ -167,9 +167,12 @@ static void RepairPostgresAuth(SimployDbContext db, IConfiguration config, ILogg
     // Try several candidate URLs: explicit config, then Docker DNS names that
     // work on Linux without `host.docker.internal` (which only resolves on
     // Docker Desktop). Fail loud so password drift is visible in the logs.
-    var candidates = (config["Agent:BaseUrl"] is { Length: > 0 } explicit
-        ? new[] { explicit }
-        : new[] { "http://simploy-agent:8089", "http://agent:8089", $"http://host.docker.internal:8089" });
+    string[] candidates;
+    var explicitBase = config["Agent:BaseUrl"];
+    if (!string.IsNullOrWhiteSpace(explicitBase))
+        candidates = new[] { explicitBase };
+    else
+        candidates = new[] { "http://simploy-agent:8089", "http://agent:8089", "http://host.docker.internal:8089" };
     var token = config["Agent:Token"] ?? "";
     using var http = new HttpClient { Timeout = TimeSpan.FromSeconds(5) };
     if (!string.IsNullOrEmpty(token))
