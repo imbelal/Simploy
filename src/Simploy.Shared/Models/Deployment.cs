@@ -20,6 +20,7 @@ public class Deployment
 
     public string? LogOutput { get; set; }
     public string? Error { get; set; }
+    public string? AgentJobId { get; set; } // async job id on the agent (for live logs/polling)
 
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     public DateTime? StartedAt { get; set; }

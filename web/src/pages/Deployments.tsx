@@ -20,6 +20,7 @@ export default function Deployments() {
   const [projectId, setProjectId] = useState('')
   const [envId, setEnvId] = useState('')
   const [msg, setMsg] = useState('')
+  const [openLog, setOpenLog] = useState<string | null>(null)
   const projectRef = useRef('')
   const envRef = useRef('')
 
@@ -47,7 +48,11 @@ export default function Deployments() {
     // Default to the first project once; never override a user selection.
     if (!projectRef.current && p[0]) { projectRef.current = p[0].id; setProjectId(p[0].id) }
     await loadEnvs(projectRef.current)
-    setDeps(await api.deployments.list().catch(() => []))
+    const d = await api.deployments.list().catch(() => [])
+    setDeps(d)
+    // Auto-follow the newest in-flight deployment (Building/Deploying/Queued).
+    const inflight = d.find((x: any) => [0, 1, 2].includes(x.status))
+    if (inflight) setOpenLog(prev => prev ?? inflight.id)
   }
   useEffect(() => { load(); const i = setInterval(load, 3000); return () => clearInterval(i) }, [])
 
@@ -116,7 +121,7 @@ export default function Deployments() {
               const info = statusInfo[label] || { label, tone: 'slate' as const }
               const healthy = label === 'Healthy'
               return (
-                <tr key={d.id} className="border-t border-slate-100 hover:bg-slate-50/60 transition">
+                <tr key={d.id} onClick={() => setOpenLog(d.id)} className={`border-t border-slate-100 hover:bg-slate-50/60 transition cursor-pointer ${openLog === d.id ? 'bg-indigo-50/50' : ''}`}>
                   <td className="px-5 py-3 text-xs text-slate-500">{new Date(d.createdAt).toLocaleString()}</td>
                   <td className="px-4 py-3 text-xs"><div className="font-medium text-slate-800">{d.environmentName || d.environmentId.slice(0, 8)}</div>{d.serverName && <div className="text-slate-400 text-[11px]">{d.serverName}</div>}</td>
                   <td className="px-4 py-3 font-mono text-xs text-slate-600">{d.imageTag}</td>
@@ -124,7 +129,7 @@ export default function Deployments() {
                   <td className="px-4 py-3 text-xs">
                     {d.accessUrl ? (
                       healthy
-                        ? <a href={d.accessUrl} target="_blank" rel="noreferrer" className="text-indigo-600 hover:underline font-medium font-mono">{d.accessUrl.replace(/^https?:\/\//, '')}</a>
+                        ? <a href={d.accessUrl} target="_blank" rel="noreferrer" className="text-indigo-600 hover:underline font-medium font-mono" onClick={e => e.stopPropagation()}>{d.accessUrl.replace(/^https?:\/\//, '')}</a>
                         : <span className="text-slate-400 font-mono" title="App still coming up — link is live once status is Healthy">{d.accessUrl.replace(/^https?:\/\//, '')}</span>
                     ) : <span className="text-slate-300">—</span>}
                   </td>
@@ -136,6 +141,24 @@ export default function Deployments() {
           </tbody>
         </table>
       </Card>
+
+      {(() => {
+        const d = deps.find(x => x.id === openLog)
+        if (!d) return null
+        const label = typeof d.status === 'number' ? ['Queued', 'Building', 'Deploying', 'Healthy', 'Failed', 'RolledBack'][d.status] : d.status
+        return (
+          <div className="rounded-2xl border border-slate-200 bg-slate-900 overflow-hidden">
+            <div className="flex items-center justify-between px-4 py-2.5 border-b border-white/10 bg-white/5">
+              <div className="flex items-center gap-2 text-sm text-slate-200">
+                <span className={`w-2 h-2 rounded-full ${[0,1,2].includes(d.status) ? 'bg-amber-400 animate-pulse-soft' : label === 'Healthy' ? 'bg-emerald-400' : 'bg-red-400'}`} />
+                Deploy logs — <span className="font-mono">{d.imageTag}</span> <span className="text-slate-400 text-xs">({label})</span>
+              </div>
+              <button onClick={() => setOpenLog(null)} className="text-slate-400 hover:text-white text-xs">✕</button>
+            </div>
+            <pre className="p-4 text-xs font-mono text-slate-100 overflow-auto max-h-[480px] whitespace-pre-wrap">{d.logOutput || 'Waiting for logs…'}</pre>
+          </div>
+        )
+      })()}
     </div>
   )
 }

@@ -29,19 +29,37 @@ app.Use(async (ctx, next) =>
 // Agent API - called by Simploy.Api control plane. /health is public
 app.MapGet("/health", () => Results.Ok(new { status = "healthy", version = "0.1.0", ts = DateTime.UtcNow }));
 
-app.MapPost("/deploy", async (AgentDeployRequest req, DockerService docker, ILogger<Program> log, CancellationToken ct) =>
+app.MapPost("/deploy", (AgentDeployRequest req, DockerService docker, ILogger<Program> log) =>
 {
-    log.LogInformation("Deploy {Project}/{Slot} image={Image} strategy={Strategy}", req.ProjectSlug, req.Slot, $"{req.ImageRepository}:{req.ImageTag}", req.Strategy);
-    try
+    var job = JobStore.Create();
+    log.LogInformation("Deploy {Project}/{Slot} image={Image} strategy={Strategy} (job {Id})", req.ProjectSlug, req.Slot, $"{req.ImageRepository}:{req.ImageTag}", req.Strategy, job.Id);
+
+    _ = Task.Run(async () =>
     {
-        var output = await docker.DeployAsync(req, ct);
-        return Results.Ok(new { ok = true, output });
-    }
-    catch (Exception ex)
-    {
-        log.LogError(ex, "Deploy failed");
-        return Results.Problem($"{ex.Message}");
-    }
+        DeployLog.CurrentJob = job;
+        try
+        {
+            var output = await docker.DeployAsync(req, CancellationToken.None);
+            DeployLog.Write(output);
+            job.Status = "Success"; job.Done = true;
+        }
+        catch (Exception ex)
+        {
+            log.LogError(ex, "Deploy failed (job {Id})", job.Id);
+            job.Status = "Failed"; job.Error = ex.Message; job.Done = true;
+        }
+        finally { DeployLog.CurrentJob = null; job.FinishedAt = DateTime.UtcNow; }
+    });
+
+    return Results.Ok(new { jobId = job.Id });
+});
+
+app.MapGet("/deploy/{jobId}", (string jobId) =>
+{
+    var job = JobStore.Get(jobId);
+    if (job is null) return Results.NotFound(new { error = "job not found" });
+    return Results.Ok(new { jobId = job.Id, status = job.Status, done = job.Done, error = job.Error,
+        logs = job.Logs.ToString(), started = job.StartedAt, finished = job.FinishedAt });
 });
 
 app.MapGet("/containers", async (DockerService docker) => Results.Ok(await docker.ListContainersAsync()));

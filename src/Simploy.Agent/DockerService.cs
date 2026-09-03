@@ -780,6 +780,7 @@ public class DockerService(IConfiguration config, ILogger<DockerService> log)
         {
             sb.AppendLine(line);
             log.LogInformation("  {Line}", line);
+            DeployLog.Write(line);
         }
     }
 

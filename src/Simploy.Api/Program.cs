@@ -31,6 +31,7 @@ builder.Services.AddSingleton<GitHubAppService>();
 builder.Services.AddSingleton<DatabaseService>();
 builder.Services.AddSingleton<BackupService>();
 builder.Services.AddHostedService<DeploymentWorker>();
+builder.Services.AddHostedService<DeploymentPoller>();
 builder.Services.AddHostedService<DatabaseWorker>();
 builder.Services.AddHostedService<BackupWorker>();
 
@@ -64,7 +65,7 @@ using (var scope = app.Services.CreateScope())
     // additive schema changes here (idempotent, Postgres only).
     if (db.Database.IsRelational())
     {
-        db.Database.ExecuteSqlRaw("ALTER TABLE \"Domains\" ADD COLUMN IF NOT EXISTS \"EnableHttps\" boolean NOT NULL DEFAULT false; ALTER TABLE \"Projects\" ADD COLUMN IF NOT EXISTS \"GithubInstallationId\" text NULL;");
+        db.Database.ExecuteSqlRaw("ALTER TABLE \"Domains\" ADD COLUMN IF NOT EXISTS \"EnableHttps\" boolean NOT NULL DEFAULT false; ALTER TABLE \"Projects\" ADD COLUMN IF NOT EXISTS \"GithubInstallationId\" text NULL; ALTER TABLE \"Deployments\" ADD COLUMN IF NOT EXISTS \"AgentJobId\" text NULL;");
         // Databases table (added after EnsureCreated for an existing DB).
         db.Database.ExecuteSqlRaw("""
             CREATE TABLE IF NOT EXISTS "Databases" (
