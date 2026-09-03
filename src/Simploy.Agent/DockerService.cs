@@ -190,11 +190,23 @@ public class DockerService(IConfiguration config, ILogger<DockerService> log)
                 await CloneAsync(cloneUrl, repo, hadToken, sourceDir, ct);
             }
 
+            // Point origin at the CURRENT token (fresh per deploy) or clean URL, so the fetch
+            // uses this deploy's auth instead of a stale token stored from a previous clone.
+            await RunAsync("git", $"-C {sourceDir} remote set-url origin {cloneUrl}", ct);
+
             // Try to move to the configured branch; if it doesn't exist (e.g. the repo
             // default is 'master', not 'main'), fall back to the remote default branch.
+            // If the token is rejected, fall back to a public (no-token) origin.
             string target;
             try
             {
+                await RunAsync("git", $"-C {sourceDir} fetch --depth 1 origin {branch}", ct);
+                target = branch;
+            }
+            catch (Exception ex) when (hadToken && IsAuthRejected(ex.Message))
+            {
+                log.LogWarning("Token rejected on {Repo}; retrying as public", repo);
+                await RunAsync("git", $"-C {sourceDir} remote set-url origin {repo}", ct);
                 await RunAsync("git", $"-C {sourceDir} fetch --depth 1 origin {branch}", ct);
                 target = branch;
             }
