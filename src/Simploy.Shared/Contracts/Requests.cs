@@ -14,6 +14,10 @@ public record AgentDbRequest(string DbName, string Type, string Version, string 
 /// <summary>Backs up Simploy's control-plane Postgres via the agent (docker exec pg_dump).</summary>
 public record AgentBackupRequest(string Container, string DatabaseName, string Username, string Password, string DestDir, int Retention);
 
+/// <summary>Resets a Postgres role's password in-place via the agent's docker socket
+/// (control-plane auto-repair when the API's connection is rejected with 28P01).</summary>
+public record AgentFixPasswordRequest(string? Container, string Role, string Password);
+
 /// <summary>
 /// A domain mapped to an environment. Sent to the agent so it can render the
 /// Caddyfile (including weighted canary split between old/new services).

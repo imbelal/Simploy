@@ -115,6 +115,15 @@ app.MapPost("/db/remove", async (AgentDbRequest req, DockerService docker, ILogg
     catch (Exception ex) { log.LogError(ex, "db remove failed"); return Results.Problem(ex.Message); }
 });
 
+// Control-plane auto-repair: reset the postgres superuser password in-place so the API
+// can connect again (no data loss). Called by Simploy.Api on startup on a 28P01 auth fail.
+app.MapPost("/system/db/fix-password", async (AgentFixPasswordRequest req, DockerService docker, ILogger<Program> log, CancellationToken ct) =>
+{
+    log.LogInformation("Fix postgres password for role {Role}", req.Role);
+    try { return Results.Ok(new { ok = true, output = await docker.FixPostgresPasswordAsync(req, ct) }); }
+    catch (Exception ex) { log.LogError(ex, "fix db password failed"); return Results.Problem(ex.Message); }
+});
+
 // Simploy control-plane backup (dump the Postgres database via docker exec)
 app.MapPost("/system/backup", async (AgentBackupRequest req, DockerService docker, ILogger<Program> log, CancellationToken ct) =>
 {

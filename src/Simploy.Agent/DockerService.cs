@@ -402,6 +402,27 @@ public class DockerService(IConfiguration config, ILogger<DockerService> log)
         return $"restored from {file}";
     }
 
+    /// <summary>Resets a postgres role's password in-place for the control-plane DB. Connects
+    /// over the container's secure local socket (trust/peer auth) so it works even when the
+    /// password auth is otherwise broken — repairing the drift without wiping data.</summary>
+    public async Task<string> FixPostgresPasswordAsync(AgentFixPasswordRequest req, CancellationToken ct)
+    {
+        var container = req.Container;
+        if (string.IsNullOrWhiteSpace(container))
+        {
+            container = await RunStdoutOnlyAsync("docker",
+                "ps -q -f name=simploy-postgres", ct);
+            if (string.IsNullOrWhiteSpace(container))
+                throw new Exception("control-plane postgres container not found");
+            container = container.Trim();
+        }
+        // -U <role> via the unix socket inside the container is trusted (peer) so we can
+        // ALTER the role even when the connection string's password is rejected.
+        return (await RunAsync("docker",
+            $"exec {container} psql -U {req.Role} -d postgres -c \"ALTER ROLE \\\"{req.Role}\\\" WITH PASSWORD '{req.Password}';\"",
+            ct: ct)).Trim();
+    }
+
     public List<object> ListBackups(string dir)
     {
         if (!Directory.Exists(dir)) return new();
