@@ -781,6 +781,34 @@ public class DockerService(IConfiguration config, ILogger<DockerService> log)
         return await client.Containers.ListContainersAsync(new ContainersListParameters { All = true });
     }
 
+    /// <summary>Streams a container's logs line-by-line (SSE) until the client disconnects.</summary>
+    public async Task StreamContainerLogsAsync(string name, int tail, Func<string, Task> writeLine, CancellationToken ct)
+    {
+        var psi = new ProcessStartInfo("docker", $"logs --tail {tail} -f {name}")
+        { RedirectStandardOutput = true, RedirectStandardError = true, UseShellExecute = false };
+        using var p = Process.Start(psi)!;
+        try
+        {
+            var stdoutTask = StreamAsync(p.StandardOutput, writeLine, ct);
+            var stderrTask = StreamAsync(p.StandardError, writeLine, ct);
+            await Task.WhenAll(stdoutTask, stderrTask);
+        }
+        finally
+        {
+            try { if (!p.HasExited) p.Kill(entireProcessTree: true); } catch { }
+        }
+    }
+
+    private static async Task StreamAsync(StreamReader reader, Func<string, Task> writeLine, CancellationToken ct)
+    {
+        try
+        {
+            while (await reader.ReadLineAsync(ct) is { } line)
+                await writeLine(line);
+        }
+        catch (OperationCanceledException) { }
+    }
+
     private async Task<string> RunAsync(string file, string args, string? workdir = null, CancellationToken ct = default, string? stdin = null, IDictionary<string, string>? env = null)
     {
         var psi = new ProcessStartInfo(file, args) { RedirectStandardOutput = true, RedirectStandardError = true, RedirectStandardInput = stdin is not null, UseShellExecute = false };

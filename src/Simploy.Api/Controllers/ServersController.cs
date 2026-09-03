@@ -8,13 +8,48 @@ using Simploy.Shared.Models;
 namespace Simploy.Api.Controllers;
 
 [ApiController, Route("api/servers"), Authorize]
-public class ServersController(SimployDbContext db) : ControllerBase
+public class ServersController(SimployDbContext db, IConfiguration config) : ControllerBase
 {
     [HttpGet]
     public async Task<IEnumerable<Server>> List() => await db.Servers.ToListAsync();
 
     [HttpGet("{id:guid}")]
     public async Task<ActionResult<Server>> Get(Guid id) => await db.Servers.FindAsync(id) is { } s ? s : NotFound();
+
+    /// <summary>Lists the running containers on a server (via the agent).</summary>
+    [HttpGet("{id:guid}/containers")]
+    public async Task<IActionResult> Containers(Guid id, CancellationToken ct)
+    {
+        var s = await db.Servers.FindAsync(id);
+        if (s is null) return NotFound();
+        using var http = new HttpClient { Timeout = TimeSpan.FromSeconds(15) };
+        var token = config["Agent:Token"] ?? "";
+        if (!string.IsNullOrEmpty(token))
+            http.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
+        var body = await http.GetStringAsync($"http://{s.Host}:8089/containers", ct);
+        return Content(body, "application/json");
+    }
+
+    /// <summary>Streams a container's logs (SSE pass-through from the agent).</summary>
+    [HttpGet("{id:guid}/containers/{name}/logs")]
+    public async Task StreamContainerLogs(Guid id, string name, string? tail, CancellationToken ct)
+    {
+        var s = await db.Servers.FindAsync(id);
+        if (s is null) { Response.StatusCode = 404; return; }
+
+        Response.Headers["Content-Type"] = "text/event-stream";
+        Response.Headers["Cache-Control"] = "no-cache";
+        Response.Headers["X-Accel-Buffering"] = "no";
+        await Response.Body.FlushAsync(ct);
+
+        using var http = new HttpClient { Timeout = TimeSpan.FromMinutes(30) };
+        var token = config["Agent:Token"] ?? "";
+        if (!string.IsNullOrEmpty(token))
+            http.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
+        var req = new HttpRequestMessage(HttpMethod.Get, $"http://{s.Host}:8089/containers/{Uri.EscapeDataString(name)}/logs?tail={tail ?? "200"}");
+        var resp = await http.SendAsync(req, HttpCompletionOption.ResponseHeadersRead, ct);
+        await resp.Content.CopyToAsync(Response.Body, ct);
+    }
 
     /// <summary>Returns the agent one-liner installer: <c>curl .../api/servers/install | bash</c>.</summary>
     [HttpGet("install"), AllowAnonymous]

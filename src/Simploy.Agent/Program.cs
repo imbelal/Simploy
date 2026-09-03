@@ -62,7 +62,30 @@ app.MapGet("/deploy/{jobId}", (string jobId) =>
         logs = job.Logs.ToString(), started = job.StartedAt, finished = job.FinishedAt });
 });
 
-app.MapGet("/containers", async (DockerService docker) => Results.Ok(await docker.ListContainersAsync()));
+app.MapGet("/containers", async (DockerService docker) =>
+    Results.Ok((await docker.ListContainersAsync()).Select(c => new
+    {
+        name = c.Names.FirstOrDefault()?.TrimStart('/'),
+        image = c.Image,
+        state = c.State,
+        status = c.Status,
+        project = c.Labels.TryGetValue("com.docker.compose.project", out var pj) ? pj : null,
+        service = c.Labels.TryGetValue("com.docker.compose.service", out var sv) ? sv : null,
+    })));
+
+app.MapGet("/containers/{name}/logs", async (string name, string? tail, HttpContext ctx, DockerService docker, CancellationToken ct) =>
+{
+    ctx.Response.Headers["Content-Type"] = "text/event-stream";
+    ctx.Response.Headers["Cache-Control"] = "no-cache";
+    ctx.Response.Headers["X-Accel-Buffering"] = "no";
+    await ctx.Response.Body.FlushAsync(ct);
+    int t = int.TryParse(tail, out var ti) ? ti : 200;
+    await docker.StreamContainerLogsAsync(name, t, async line =>
+    {
+        await ctx.Response.WriteAsync($"data: {line}\n\n");
+        await ctx.Response.Body.FlushAsync(ct);
+    }, ct);
+});
 
 // Managed database provisioning
 app.MapPost("/db/deploy", async (AgentDbRequest req, DockerService docker, ILogger<Program> log, CancellationToken ct) =>

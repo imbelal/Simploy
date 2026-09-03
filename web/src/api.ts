@@ -41,6 +41,7 @@ export const api = {
     create: (b: any) => req<any>('/api/servers', { method: 'POST', body: JSON.stringify(b) }),
     check: (id: string) => req<any>(`/api/servers/${id}/check`, { method: 'POST' }),
     del: (id: string) => req<any>(`/api/servers/${id}`, { method: 'DELETE' }),
+    containers: (id: string) => req<any[]>(`/api/servers/${id}/containers`),
   },
   projects: {
     list: () => req<any[]>('/api/projects'),

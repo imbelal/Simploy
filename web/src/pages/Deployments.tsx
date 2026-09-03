@@ -23,6 +23,10 @@ export default function Deployments() {
   const [openLog, setOpenLog] = useState<string | null>(null)
   const [liveLog, setLiveLog] = useState('')
   const [liveStatus, setLiveStatus] = useState('')
+  const [ctrOpen, setCtrOpen] = useState(false)
+  const [ctrList, setCtrList] = useState<any[]>([])
+  const [ctrStream, setCtrStream] = useState<string | null>(null)
+  const [ctrLog, setCtrLog] = useState('')
   const projectRef = useRef('')
   const envRef = useRef('')
 
@@ -110,6 +114,45 @@ export default function Deployments() {
     catch (e: any) { setMsg(e.message) }
   }
 
+  const openContainers = async () => {
+    const env = envs.find(x => x.id === envId)
+    if (!env?.server?.id) return setMsg('Pick an environment (on a server) first')
+    try { setCtrList(await api.servers.containers(env.server.id)); setCtrOpen(true); setCtrStream(null); setCtrLog('') }
+    catch (e: any) { setMsg(e.message) }
+  }
+
+  // Stream a container's logs (SSE-over-fetch).
+  useEffect(() => {
+    setCtrLog('')
+    if (!ctrStream) return
+    const env = envs.find(x => x.id === envId)
+    if (!env?.server?.id) return
+    let cancelled = false
+    const token = localStorage.getItem('simploy.jwt')
+    const run = async () => {
+      try {
+        const resp = await fetch(`/api/servers/${env.server.id}/containers/${ctrStream}/logs`, { headers: token ? { Authorization: `Bearer ${token}` } : {} })
+        if (!resp.ok || !resp.body) return
+        const reader = resp.body.getReader(); const dec = new TextDecoder(); let buf = ''
+        while (!cancelled) {
+          const { done, value } = await reader.read()
+          if (done) break
+          buf += dec.decode(value, { stream: true })
+          let i
+          while ((i = buf.indexOf('\n\n')) !== -1) {
+            const block = buf.slice(0, i); buf = buf.slice(i + 2)
+            for (const ln of block.split('\n')) {
+              const m = ln.match(/^data:\s?(.*)$/)
+              if (m) setCtrLog(prev => prev + m[1] + '\n')
+            }
+          }
+        }
+      } catch { }
+    }
+    run()
+    return () => { cancelled = true }
+  }, [ctrStream])
+
   return (
     <div className="space-y-6">
       <PageHeader title="Deployments" desc="Trigger a build and see how it runs. Recreate swaps the app; Canary keeps the previous version running and shifts traffic over gradually." />
@@ -143,6 +186,7 @@ export default function Deployments() {
           <div className="flex gap-3 mt-4 flex-wrap">
             <Button variant="primary" onClick={() => deploy('Recreate')} title="Rebuild and swap out">Recreate</Button>
             <Button variant="secondary" onClick={() => deploy('Canary')} title="Deploy alongside the old version, shift traffic gradually">Canary</Button>
+            <Button variant="secondary" onClick={openContainers} title="View running app container logs">Container logs</Button>
           </div>
         )}
         {msg && <div className="mt-3 text-xs bg-slate-50 border border-slate-200 rounded-lg p-2.5 font-mono text-slate-600">{msg}</div>}
@@ -196,6 +240,24 @@ export default function Deployments() {
           </div>
         )
       })()}
+
+      {ctrOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-sm p-4">
+          <div className="bg-slate-900 rounded-2xl border border-white/10 shadow-deep w-full max-w-3xl overflow-hidden">
+            <div className="flex items-center justify-between px-4 py-2.5 border-b border-white/10 bg-white/5">
+              <div className="text-sm font-medium text-slate-200">App container logs</div>
+              <button onClick={() => setCtrOpen(false)} className="text-slate-400 hover:text-white text-xs">✕</button>
+            </div>
+            <div className="flex gap-3 px-4 py-3 border-b border-white/5 bg-white/5 overflow-x-auto">
+              {ctrList.map(c => (
+                <button key={c.name} onClick={() => setCtrStream(c.name)} className={`shrink-0 px-3 py-1.5 rounded-lg text-xs font-mono ${ctrStream === c.name ? 'bg-indigo-500 text-white' : 'bg-white/5 text-slate-300 hover:bg-white/10'}`}>{c.name}</button>
+              ))}
+              {ctrList.length === 0 && <span className="text-xs text-slate-400">No containers on this server.</span>}
+            </div>
+            <pre className="p-4 text-xs font-mono text-slate-100 overflow-auto max-h-[60vh] whitespace-pre-wrap">{ctrLog || (ctrStream ? 'Streaming…' : 'Pick a container above.')}</pre>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
