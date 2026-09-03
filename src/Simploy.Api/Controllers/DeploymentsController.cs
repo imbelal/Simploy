@@ -9,7 +9,7 @@ using Simploy.Shared.Models;
 namespace Simploy.Api.Controllers;
 
 [ApiController, Route("api/deployments"), Authorize]
-public class DeploymentsController(SimployDbContext db, DeploymentService deployer) : ControllerBase
+public class DeploymentsController(SimployDbContext db, DeploymentService deployer, IConfiguration config) : ControllerBase
 {
     [HttpGet]
     public async Task<IEnumerable<DeploymentDto>> List([FromQuery] Guid? environmentId)
@@ -55,5 +55,59 @@ public class DeploymentsController(SimployDbContext db, DeploymentService deploy
         await db.SaveChangesAsync();
         _ = deployer.EnqueueAsync(rollback.Id);
         return AcceptedAtAction(nameof(Get), new { id = rollback.Id }, rollback);
+    }
+
+    /// <summary>Server-Sent Events stream of a deployment's live build logs.</summary>
+    [HttpGet("{id:guid}/logs/stream")]
+    public async Task StreamLogs(Guid id, CancellationToken ct)
+    {
+        var d = await db.Deployments.Include(x => x.Environment).ThenInclude(e => e.Server)
+            .FirstOrDefaultAsync(x => x.Id == id, ct);
+        if (d?.AgentJobId is null || d.Environment?.Server is null) { Response.StatusCode = 404; return; }
+
+        Response.Headers["Content-Type"] = "text/event-stream";
+        Response.Headers["Cache-Control"] = "no-cache";
+        Response.Headers["X-Accel-Buffering"] = "no";
+        await Response.Body.FlushAsync(ct);
+
+        using var http = new System.Net.Http.HttpClient { Timeout = TimeSpan.FromSeconds(15) };
+        var token = config["Agent:Token"] ?? "";
+        var agentUrl = $"http://{d.Environment.Server.Host}:8089/deploy/{d.AgentJobId}";
+        var last = "";
+
+        while (!ct.IsCancellationRequested)
+        {
+            try
+            {
+                using var req = new System.Net.Http.HttpRequestMessage(System.Net.Http.HttpMethod.Get, agentUrl);
+                if (!string.IsNullOrEmpty(token))
+                    req.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
+                var resp = await http.SendAsync(req, ct);
+                var body = await resp.Content.ReadAsStringAsync(ct);
+                using var doc = System.Text.Json.JsonDocument.Parse(body);
+                var root = doc.RootElement;
+                var logs = root.GetProperty("logs").GetString() ?? "";
+                if (logs.Length > last.Length)
+                {
+                    var newText = logs[last.Length..];
+                    foreach (var line in newText.Split('\n'))
+                        if (line.Length > 0)
+                        {
+                            await Response.WriteAsync($"event: log\ndata: {line}\n\n", ct);
+                            await Response.Body.FlushAsync(ct);
+                        }
+                    last = logs;
+                }
+                if (root.GetProperty("done").GetBoolean())
+                {
+                    var st = root.TryGetProperty("status", out var s) ? s.GetString() : "";
+                    await Response.WriteAsync($"event: done\ndata: {{\"status\":\"{st}\"}}\n\n", ct);
+                    await Response.Body.FlushAsync(ct);
+                    break;
+                }
+            }
+            catch { /* transient */ }
+            await Task.Delay(500, ct);
+        }
     }
 }
