@@ -16,6 +16,12 @@ export default function Backups() {
 
   const save = async () => { if (s) { await api.backups.set(s); setMsg('Saved'); load() } }
   const run = async () => { await api.backups.run(); setMsg('Backup triggered'); load() }
+  const restore = async (file: string) => {
+    if (!confirm('Restore this backup into the control-plane database? This overwrites current data. A backup is taken first.')) return
+    setMsg('Restoring…'); 
+    try { const r: any = await api.backups.restore(file); setMsg('Restored: ' + (r.result || file)) ; load() }
+    catch (e: any) { setMsg(e.message) }
+  }
 
   if (!s) return <EmptyState title="Loading…" />
 
@@ -49,16 +55,17 @@ export default function Backups() {
 
       <Card title={`Backups (${files.length})`}>
         <table className="w-full text-sm">
-          <thead className="bg-slate-50 text-slate-500"><tr><th className="text-left px-5 py-3 font-medium">File</th><th className="text-left px-4 py-3 font-medium">Created</th><th className="text-left px-4 py-3 font-medium">Size</th></tr></thead>
+          <thead className="bg-slate-50 text-slate-500"><tr><th className="text-left px-5 py-3 font-medium">File</th><th className="text-left px-4 py-3 font-medium">Created</th><th className="text-left px-4 py-3 font-medium">Size</th><th className="text-left px-4 py-3 font-medium">Actions</th></tr></thead>
           <tbody>
             {files.map((f: any) => (
               <tr key={f.name} className="border-t border-slate-100">
                 <td className="px-5 py-2.5 font-mono text-xs text-slate-700">{f.name}</td>
                 <td className="px-4 py-2.5 text-xs text-slate-500">{new Date(f.created).toLocaleString()}</td>
                 <td className="px-4 py-2.5 text-xs text-slate-500">{(f.size / 1024).toFixed(1)} KB</td>
+                <td className="px-4 py-2.5"><Button size="sm" variant="danger" onClick={() => restore(f.name)}>Restore</Button></td>
               </tr>
             ))}
-            {files.length === 0 && <tr><td colSpan={3}><EmptyState title="No backups yet">Enable backups or click “Back up now”.</EmptyState></td></tr>}
+            {files.length === 0 && <tr><td colSpan={4}><EmptyState title="No backups yet">Enable backups or click “Back up now”.</EmptyState></td></tr>}
           </tbody>
         </table>
       </Card>

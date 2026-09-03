@@ -36,6 +36,21 @@ public class BackupService(IConfiguration config)
         return await resp.Content.ReadAsStringAsync(ct);
     }
 
+    /// <summary>Restores a backup file into the control-plane Postgres (via the agent).</summary>
+    public async Task<string> RestoreAsync(BackupSettings s, string file, CancellationToken ct)
+    {
+        var conn = Parse(System.Environment.GetEnvironmentVariable("ConnectionStrings__Default") ?? config.GetConnectionString("Default"));
+        using var http = new HttpClient { Timeout = TimeSpan.FromMinutes(10) };
+        var token = config["Agent:Token"] ?? "";
+        if (!string.IsNullOrEmpty(token))
+            http.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+        var payload = new AgentBackupRequest(s.DbContainer, conn.database, conn.username, conn.password, file, s.Retention);
+        var resp = await http.PostAsJsonAsync($"{AgentUrl}/system/backup/restore", payload, ct);
+        var body = await resp.Content.ReadAsStringAsync(ct);
+        resp.EnsureSuccessStatusCode();
+        return body;
+    }
+
     private static (string database, string username, string password) Parse(string? cs)
     {
         cs ??= "";

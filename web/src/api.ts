@@ -73,5 +73,6 @@ export const api = {
     set: (b: any) => req<any>('/api/settings/backups', { method: 'PUT', body: JSON.stringify(b) }),
     run: () => req<any>('/api/settings/backups/run', { method: 'POST' }),
     list: () => req<any[]>('/api/settings/backups/list'),
+    restore: (file: string) => req<any>('/api/settings/backups/restore', { method: 'POST', body: JSON.stringify({ file }) }),
   },
 };

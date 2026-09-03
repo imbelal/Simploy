@@ -53,4 +53,15 @@ public class BackupsController(SimployDbContext db, BackupService backup) : Cont
         var body = await backup.ListAsync(s.DestDir, ct);
         return Content(body, "application/json");
     }
+
+    /// <summary>Restores a backup file into the control-plane database (via the agent).</summary>
+    [HttpPost("restore")]
+    public async Task<IActionResult> Restore(RestoreRequest req, CancellationToken ct)
+    {
+        var s = await EnsureAsync(db);
+        var result = await backup.RestoreAsync(s, req.File, ct);
+        return Ok(new { result });
+    }
 }
+
+public record RestoreRequest(string File);
