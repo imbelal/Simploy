@@ -666,11 +666,18 @@ public class DockerService(IConfiguration config, ILogger<DockerService> log)
         string raw;
         try
         {
+            // Force plain text — `docker stats --no-stream` defaults to a table
+            // (Name ... CPUPerc ... MemUsage ...) that includes the header row,
+            // which would then fail JSON parsing and return an empty list.
             raw = await RunStdoutOnlyAsync("docker",
                 "stats --no-stream --format \"{{json .}}\"", ct);
         }
-        catch { return metrics; } // docker unavailable or no containers
-        if (string.IsNullOrWhiteSpace(raw)) return metrics;
+        catch (Exception ex) { log.LogWarning(ex, "docker stats failed"); return metrics; } // docker unavailable or no containers
+        if (string.IsNullOrWhiteSpace(raw))
+        {
+            log.LogInformation("docker stats returned no output (no running containers?)");
+            return metrics;
+        }
 
         foreach (var line in raw.Split('\n', StringSplitOptions.RemoveEmptyEntries))
         {
@@ -678,19 +685,24 @@ public class DockerService(IConfiguration config, ILogger<DockerService> log)
             {
                 using var doc = System.Text.Json.JsonDocument.Parse(line);
                 var r = doc.RootElement;
-                var mem = (r.TryGetProperty("MemUsage", out var m) ? m.GetString() : "")!.Trim();
-                var memPerc = (r.TryGetProperty("MemPerc", out var mp) ? mp.GetString() : "")!.Trim();
+                // `docker stats` emits either "Name" (Docker >=24) or "Container" (older).
+                var rawName = r.TryGetProperty("Name", out var n) ? n.GetString()
+                            : r.TryGetProperty("Container", out var c2) ? c2.GetString()
+                            : null;
+                var name = (rawName ?? "").TrimStart('/');
+                if (string.IsNullOrEmpty(name)) continue;
                 metrics.Add(new
                 {
-                    name = (r.TryGetProperty("Name", out var n) ? n.GetString() : "")!.TrimStart('/'),
-                    cpuPerc = (r.TryGetProperty("CPUPerc", out var c) ? c.GetString() : "")!.Trim(),
-                    memUsage = mem,
-                    memPerc = memPerc,
-                    pids = (r.TryGetProperty("PIDs", out var p) ? p.GetInt64() : 0),
+                    name,
+                    cpuPerc = (r.TryGetProperty("CPUPerc", out var c) ? c.GetString() : "").Trim(),
+                    memUsage = (r.TryGetProperty("MemUsage", out var m) ? m.GetString() : "").Trim(),
+                    memPerc = (r.TryGetProperty("MemPerc", out var mp) ? mp.GetString() : "").Trim(),
+                    pids = r.TryGetProperty("PIDs", out var p) && p.TryGetInt64(out var pi) ? pi : 0L,
                 });
             }
-            catch { /* skip malformed line */ }
+            catch (Exception ex) { log.LogDebug(ex, "Skipping malformed stats line: {Line}", line); }
         }
+        log.LogInformation("docker stats returned {Count} container rows", metrics.Count);
         return metrics;
     }
 
