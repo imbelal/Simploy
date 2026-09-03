@@ -73,6 +73,7 @@ public class DeploymentService(IServiceProvider sp, IConfiguration config, GitHu
                 GitToken: gitToken,
                 DockerfilePath: env.Project.DockerfilePath,
                 DockerContext: env.Project.DockerContext,
+                Template: env.Project.Template,
                 RegistryUsername: env.Project.RegistryUsername,
                 RegistryPassword: env.Project.RegistryPassword,
                 EnvVars: env.EnvVars,

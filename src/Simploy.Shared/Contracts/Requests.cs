@@ -38,6 +38,7 @@ public record AgentDeployRequest(
     string? GitToken,
     string? DockerfilePath,
     string? DockerContext,
+    string? Template,
     string? RegistryUsername,
     string? RegistryPassword,
     IReadOnlyDictionary<string, string>? EnvVars,

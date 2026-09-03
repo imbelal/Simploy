@@ -10,6 +10,8 @@ public class Project
     public string ImageRepository { get; set; } = default!; // ghcr.io/imbelal/bdshopmanager
     public string DockerfilePath { get; set; } = "src/WebApi/Dockerfile";
     public string? DockerContext { get; set; } = ".";
+    // Optional template used when the repo has no Dockerfile: vite|react|static|node|next|django
+    public string? Template { get; set; }
     // Private repo / registry auth (stored encrypted in prod, plaintext for demo)
     public string? GitToken { get; set; } // PAT classic with repo scope for private clone
     // When using a GitHub App instead of a PAT, the installation granting access to the repo.

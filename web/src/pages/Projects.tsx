@@ -7,7 +7,7 @@ import { Badge, Button, Card, EmptyState, Field, PageHeader, Panel, inputCls } f
 export default function Projects() {
   const [projects, setProjects] = useState<any[]>([])
   const [servers, setServers] = useState<any[]>([])
-  const [form, setForm] = useState({ name: 'BdShopManager', slug: 'bdshopmanager', imageRepository: 'ghcr.io/imbelal/bdshopmanager', gitRepository: 'https://github.com/imbelal/BdShopManager', gitToken: '', registryUsername: '', registryPassword: '', dockerfilePath: 'src/WebApi/Dockerfile', dockerContext: '.' })
+  const [form, setForm] = useState({ name: 'BdShopManager', slug: 'bdshopmanager', imageRepository: 'ghcr.io/imbelal/bdshopmanager', gitRepository: 'https://github.com/imbelal/BdShopManager', gitToken: '', registryUsername: '', registryPassword: '', dockerfilePath: 'src/WebApi/Dockerfile', dockerContext: '.', template: 'static' })
   const [showPrivate, setShowPrivate] = useState(false)
   const [msg, setMsg] = useState('')
   const [envEdit, setEnvEdit] = useState<any>(null)
@@ -76,8 +76,19 @@ export default function Projects() {
     if (!form.slug) return toast('Slug is required', 'error')
     const payload = { ...form, imageRepository: (form.imageRepository || form.slug).trim(), gitRepository: form.gitRepository || null }
     setBusy(true)
-    try { await api.projects.create(payload); toast('Project created' + (form.gitToken || form.registryPassword ? ' with private auth' : ' (public)')); load() }
+    try { await api.projects.create(payload); toast('Project created' + (form.gitToken || form.registryPassword ? ' with private auth' : ' (public)')); setForm(f => ({ ...f, name: '', slug: '', template: 'static' })); load() }
     catch (e: any) { toast(e.message, 'error') } finally { setBusy(false) }
+  }
+  const applyTemplate = (t: string) => {
+    const map: Record<string, { df: string; ctx: string; port: string }> = {
+      static: { df: 'Dockerfile', ctx: '.', port: '8080' },
+      react: { df: 'Dockerfile', ctx: '.', port: '8080' },
+      vite: { df: 'Dockerfile', ctx: '.', port: '8080' },
+      node: { df: 'Dockerfile', ctx: '.', port: '3000' },
+      next: { df: 'Dockerfile', ctx: '.', port: '3000' },
+      django: { df: 'Dockerfile', ctx: '.', port: '8000' },
+    }
+    setForm(f => ({ ...f, template: t, dockerfilePath: map[t]?.df ?? f.dockerfilePath, dockerContext: map[t]?.ctx ?? f.dockerContext }))
   }
   const delProject = async (id: string) => {
     if (!confirm('Delete project + all its environments?')) return
@@ -174,6 +185,16 @@ export default function Projects() {
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <Field label="Project name" hint="Display name, e.g. BdShopManager">
             <input className={inputCls} value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} />
+          </Field>
+          <Field label="Template" hint="Used when the repo ships no Dockerfile — Simploy generates one (port auto-set).">
+            <select className={inputCls} value={form.template} onChange={e => applyTemplate(e.target.value)}>
+              <option value="static">Static (Vite/React/Vue) · nginx :8080</option>
+              <option value="react">React (Vite) · nginx :8080</option>
+              <option value="vite">Vite · nginx :8080</option>
+              <option value="node">Node (Express/API) · :3000</option>
+              <option value="next">Next.js · :3000</option>
+              <option value="django">Django · :8000</option>
+            </select>
           </Field>
           <Field label="Slug" hint="Unique id; used in container and folder names. Lowercase + dashes.">
             <input className={inputCls} value={form.slug} onChange={e => setForm({ ...form, slug: e.target.value.toLowerCase().replace(/\s+/g, '-') })} />
