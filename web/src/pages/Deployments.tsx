@@ -123,8 +123,13 @@ export default function Deployments() {
     catch (e: any) { setMsg(e.message) }
   }
 
-  const runAll = async () => {
-    if (!confirm('Re-deploy every environment and re-provision every database? This rebuilds/runs all recorded resources.')) return
+  const rollback = async (id: string) => {
+    if (!confirm('Roll back this environment to the last healthy image?')) return
+    try { const r: any = await api.deployments.rollback(id); toast('Rollback queued → ' + r.imageTag); load() }
+    catch (e: any) { toast(e.message, 'error') }
+  }
+
+  const runAll = async () => {    if (!confirm('Re-deploy every environment and re-provision every database? This rebuilds/runs all recorded resources.')) return
     setBusy('runAll')
     try {
       const [d, b] = await Promise.all([api.deployments.runAll(), api.databases.runAll()])
@@ -207,7 +212,7 @@ export default function Deployments() {
 
       <Card title={`Recent deployments (${visibleDeps.length})`}>
         <table className="w-full text-sm">
-          <thead className="bg-slate-50 text-slate-500"><tr><th className="text-left px-5 py-3 font-medium">When</th><th className="text-left px-4 py-3 font-medium">Environment</th><th className="text-left px-4 py-3 font-medium">Tag</th><th className="text-left px-4 py-3 font-medium">Status</th><th className="text-left px-4 py-3 font-medium">Reach app</th><th className="text-left px-4 py-3 font-medium">Error / Log</th></tr></thead>
+          <thead className="bg-slate-50 text-slate-500"><tr><th className="text-left px-5 py-3 font-medium">When</th><th className="text-left px-4 py-3 font-medium">Environment</th><th className="text-left px-4 py-3 font-medium">Tag</th><th className="text-left px-4 py-3 font-medium">Status</th><th className="text-left px-4 py-3 font-medium">Reach app</th><th className="text-left px-4 py-3 font-medium">Error / Log</th><th className="text-left px-4 py-3 font-medium"></th></tr></thead>
           <tbody>
             {visibleDeps.map(d => {
               const label = typeof d.status === 'number' ? ['Queued', 'Building', 'Deploying', 'Healthy', 'Failed', 'RolledBack'][d.status] : d.status
@@ -227,10 +232,13 @@ export default function Deployments() {
                     ) : <span className="text-slate-300">—</span>}
                   </td>
                   <td className="px-4 py-3 text-xs text-red-600 max-w-[220px] truncate" title={d.error || d.logOutput || ''}>{d.error || ''}</td>
+                  <td className="px-4 py-3 text-right" onClick={e => e.stopPropagation()}>
+                    <Button size="sm" variant="secondary" onClick={() => rollback(d.id)} title="Roll back to the last healthy image">↩</Button>
+                  </td>
                 </tr>
               )
             })}
-            {visibleDeps.length === 0 && <tr><td colSpan={6}><EmptyState title="No deployments yet">Trigger one above.</EmptyState></td></tr>}
+            {visibleDeps.length === 0 && <tr><td colSpan={7}><EmptyState title="No deployments yet">Trigger one above.</EmptyState></td></tr>}
           </tbody>
         </table>
       </Card>

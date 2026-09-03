@@ -159,6 +159,8 @@ public class DeploymentPoller(IServiceProvider sp, IConfiguration config, ILogge
     {
         var server = d.Environment?.Server;
         if (server is null) return;
+        var svcName = scope.ServiceProvider.GetRequiredService<SimployDbContext>();
+        var deploySvc = scope.ServiceProvider.GetRequiredService<DeploymentService>();
         using var http = new HttpClient { Timeout = TimeSpan.FromSeconds(15) };
         var token = config["Agent:Token"] ?? "";
         if (!string.IsNullOrEmpty(token))
@@ -178,7 +180,24 @@ public class DeploymentPoller(IServiceProvider sp, IConfiguration config, ILogge
             d.Status = status == "Success" ? DeploymentStatus.Healthy : DeploymentStatus.Failed;
             if (d.Status == DeploymentStatus.Failed && string.IsNullOrEmpty(d.Error)) d.Error = d.LogOutput is { Length: > 0 } ? d.LogOutput[..Math.Min(d.LogOutput.Length, 500)] : "deploy failed";
             d.FinishedAt = DateTime.UtcNow;
-            await scope.ServiceProvider.GetRequiredService<SimployDbContext>().SaveChangesAsync(ct);
+            await svcName.SaveChangesAsync(ct);
+
+            // Auto-rollback to the last healthy image when a non-rollback deploy fails.
+            if (d.Status == DeploymentStatus.Failed && d.TriggeredBy != "rollback"
+                && d.Environment?.AutoRollback == true)
+            {
+                var lastGood = await svcName.Deployments
+                    .Where(x => x.EnvironmentId == d.EnvironmentId && x.Status == DeploymentStatus.Healthy
+                        && x.ImageTag != d.ImageTag && x.Id != d.Id)
+                    .OrderByDescending(x => x.CreatedAt).Select(x => x.ImageTag).FirstOrDefaultAsync(ct);
+                if (lastGood is not null)
+                {
+                    var rb = new Deployment { EnvironmentId = d.EnvironmentId, ImageTag = lastGood, Strategy = DeploymentStrategy.Recreate, Status = DeploymentStatus.Queued, TriggeredBy = "rollback" };
+                    svcName.Deployments.Add(rb);
+                    await svcName.SaveChangesAsync(ct);
+                    _ = deploySvc.EnqueueAsync(rb.Id);
+                }
+            }
         }
         else
         {

@@ -13,6 +13,8 @@ public class Environment
     public string Slot { get; set; } = default!; // prod, staging -> used as compose -p
     public string? Branch { get; set; } = "main";
     public string ImageTag { get; set; } = "prod"; // prod / staging
+    // Automatically roll back to the last healthy deployment when a deploy fails.
+    public bool AutoRollback { get; set; } = true;
 
     // Caddy / routing
     public List<Domain> Domains { get; set; } = [];

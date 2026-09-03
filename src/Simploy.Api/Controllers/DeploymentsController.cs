@@ -66,7 +66,16 @@ public class DeploymentsController(SimployDbContext db, DeploymentService deploy
     {
         var d = await db.Deployments.FindAsync(id);
         if (d is null) return NotFound();
-        var rollback = new Deployment { EnvironmentId = d.EnvironmentId, ImageTag = d.ImageTag, Strategy = DeploymentStrategy.Recreate, Status = DeploymentStatus.Queued };
+        // Roll back to the last healthy image for this environment (different tag than the current one).
+        var lastGood = await db.Deployments
+            .Where(x => x.EnvironmentId == d.EnvironmentId && x.Status == DeploymentStatus.Healthy
+                && x.ImageTag != d.ImageTag && x.Id != d.Id)
+            .OrderByDescending(x => x.CreatedAt)
+            .Select(x => x.ImageTag)
+            .FirstOrDefaultAsync();
+        if (lastGood is null) return BadRequest(new { error = "No previous healthy deployment to roll back to" });
+
+        var rollback = new Deployment { EnvironmentId = d.EnvironmentId, ImageTag = lastGood, Strategy = DeploymentStrategy.Recreate, Status = DeploymentStatus.Queued, TriggeredBy = "rollback" };
         db.Deployments.Add(rollback);
         await db.SaveChangesAsync();
         _ = deployer.EnqueueAsync(rollback.Id);
